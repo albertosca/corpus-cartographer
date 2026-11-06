@@ -23,7 +23,7 @@ struct Options {
     input: PathBuf,
     /// The directory holding vocab.json and embeddings.safetensors. Without
     /// it every term the export names is its own axis.
-    #[arg(long, alias = "epicure-dir")]
+    #[arg(long, alias = corpus_cartographer::legacy_v2::EMBEDDINGS_FLAG_ALIAS)]
     embeddings_dir: Option<PathBuf>,
     /// Where links.json, map-spec.v1.json and map-spec.nested.json go.
     #[arg(long)]

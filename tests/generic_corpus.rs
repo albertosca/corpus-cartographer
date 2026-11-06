@@ -223,15 +223,24 @@ fn identity_axes_agree_with_an_explicit_identity_matrix_on_the_golden_export() {
     assert_eq!(dense.summary, generic.summary);
 }
 
-#[test]
-fn the_hiking_trails_example_makes_a_valid_map() {
-    let text = std::fs::read_to_string(
-        std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("examples/hiking-trails.json"),
+fn example_text(name: &str) -> String {
+    std::fs::read_to_string(
+        std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("examples")
+            .join(name),
     )
-    .unwrap();
+    .unwrap()
+}
+
+fn assert_valid_map(name: &str, export_schema: &str, links_schema: &str, noun: &str) {
+    let text = example_text(name);
     let output =
         corpus_cartographer::run_without_embeddings(&text, &support::golden_options()).unwrap();
-    assert!(output.summary.contains("recipes=15"), "{}", output.summary);
+    assert!(
+        output.summary.contains(&format!("{noun}=15")),
+        "{}",
+        output.summary
+    );
     assert!(
         output.summary.contains("with_vector=14"),
         "{}",
@@ -239,8 +248,8 @@ fn the_hiking_trails_example_makes_a_valid_map() {
     );
     let contracts = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("contracts");
     for (schema, document) in [
-        ("engine-export.v2.schema.json", text.as_str()),
-        ("engine-links.v2.schema.json", &output.links_json),
+        (export_schema, text.as_str()),
+        (links_schema, &output.links_json),
         ("map-spec.v1.schema.json", &output.map_spec_v1),
         ("map-spec.nested.schema.json", &output.map_spec_nested),
     ] {
@@ -256,6 +265,52 @@ fn the_hiking_trails_example_makes_a_valid_map() {
             .collect();
         assert!(errors.is_empty(), "{schema}: {errors:#?}");
     }
+}
+
+#[test]
+fn the_hiking_trails_example_makes_a_valid_map() {
+    assert_valid_map(
+        "hiking-trails.json",
+        "engine-export.v3.schema.json",
+        "engine-links.v3.schema.json",
+        "items",
+    );
+}
+
+#[test]
+fn the_v2_hiking_trails_witness_still_makes_a_valid_map() {
+    assert_valid_map(
+        "hiking-trails.v2.json",
+        "engine-export.v2.schema.json",
+        "engine-links.v2.schema.json",
+        "recipes",
+    );
+}
+
+#[test]
+fn the_v2_and_v3_trails_link_the_same_pairs() {
+    let pairs = |name: &str| -> Vec<(u64, u64)> {
+        let output = corpus_cartographer::run_without_embeddings(
+            &example_text(name),
+            &support::golden_options(),
+        )
+        .unwrap();
+        let document: serde_json::Value = serde_json::from_str(&output.links_json).unwrap();
+        document["links"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|link| {
+                (
+                    link["source"].as_u64().unwrap(),
+                    link["target"].as_u64().unwrap(),
+                )
+            })
+            .collect()
+    };
+    let new = pairs("hiking-trails.json");
+    assert_ne!(new, Vec::new());
+    assert_eq!(pairs("hiking-trails.v2.json"), new);
 }
 
 #[test]

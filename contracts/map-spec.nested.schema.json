@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "recipes-cartographer/map-spec/nested",
+  "$id": "corpus-cartographer/map-spec/nested",
   "title": "corpus-map MapSpec version 1 with nested territories and edges (corpus-map README, The map spec)",
   "type": "object",
   "additionalProperties": false,

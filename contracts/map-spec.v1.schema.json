@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "recipes-cartographer/map-spec/v1",
+  "$id": "corpus-cartographer/map-spec/v1",
   "title": "corpus-map MapSpec version 1",
   "type": "object",
   "additionalProperties": false,

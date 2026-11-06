@@ -109,6 +109,8 @@ pub fn parse(text: &str) -> Result<EngineExport, ExportError> {
 
 pub const LINKS_SCHEMA: &str = "recipes-cartographer/engine-links";
 pub const LINKS_VERSION: u32 = 2;
+/// The flag a v2 caller passes for the embeddings directory.
+pub const EMBEDDINGS_FLAG_ALIAS: &str = "epicure-dir";
 /// The noun the one-line run summary has always used for items.
 pub const COUNT_NOUN: &str = "recipes";
 
