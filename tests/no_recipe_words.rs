@@ -10,14 +10,17 @@ fn offending(directory: &Path, skip: &[&str]) -> Vec<String> {
     for entry in fs::read_dir(directory).unwrap() {
         let path = entry.unwrap().path();
         let name = path.file_name().unwrap().to_string_lossy().to_string();
-        if skip.contains(&name.as_str()) || name.contains(".v2") {
+        if skip.contains(&name.as_str())
+            || name.ends_with(".v2.json")
+            || name.ends_with(".v2.schema.json")
+        {
             continue;
         }
         if path.is_dir() {
             hits.extend(offending(&path, skip));
             continue;
         }
-        let text = fs::read_to_string(&path).unwrap_or_default().to_lowercase();
+        let text = String::from_utf8_lossy(&fs::read(&path).unwrap()).to_lowercase();
         if WORDS.iter().any(|word| text.contains(word)) {
             hits.push(path.display().to_string());
         }

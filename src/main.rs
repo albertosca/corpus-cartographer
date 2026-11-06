@@ -1,4 +1,4 @@
-//! items-engine: reads the Rails export and, when given, Embeddings, writes links.json and
+//! corpus-cartographer: reads the export document and, when given, embeddings, writes links.json and
 //! the two map specs into --out-dir. Each file is written to a temporary
 //! name and renamed, so a reader never sees half a document.
 
@@ -18,7 +18,7 @@ use corpus_cartographer::links::{DEFAULT_FLOOR, DEFAULT_MAX_LINKS, LinkOptions};
     about = "Lays out a corpus map and finds links between items"
 )]
 struct Options {
-    /// The export written by the Rails app.
+    /// The engine-export document written by the host app.
     #[arg(long)]
     input: PathBuf,
     /// The directory holding vocab.json and embeddings.safetensors. Without

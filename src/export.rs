@@ -1,6 +1,6 @@
 //! The engine's input, written by the host application and pinned by
 //! contracts/engine-export.v3.schema.json and its golden. Export v2, the
-//! item-era wire format, is still read through `legacy_v2`.
+//! earlier wire format, is still read through `legacy_v2`.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;

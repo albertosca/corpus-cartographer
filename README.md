@@ -1,7 +1,7 @@
 🇺🇸 [English](README.md) · 🇧🇷 [Português](README.pt.md)
 
 [![CI](https://github.com/albertosca/corpus-cartographer/actions/workflows/ci.yml/badge.svg)](https://github.com/albertosca/corpus-cartographer/actions/workflows/ci.yml)
-[![Lint](https://img.shields.io/github/actions/workflow/status/albertosca/corpus-cartographer/ci.yml?branch=main&job=lint&label=lint)](https://github.com/albertosca/corpus-cartographer/actions/workflows/ci.yml)
+[![Lint](https://github.com/albertosca/corpus-cartographer/actions/workflows/lint.yml/badge.svg)](https://github.com/albertosca/corpus-cartographer/actions/workflows/lint.yml)
 
 # corpus-cartographer
 
