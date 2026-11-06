@@ -15,7 +15,12 @@ fn contracts_directory() -> PathBuf {
 
 fn output() -> corpus_cartographer::EngineOutput {
     let input = fs::read_to_string(contracts_directory().join("engine-export.v2.json")).unwrap();
-    corpus_cartographer::run(&input, &support::mini_epicure(), &support::golden_options()).unwrap()
+    corpus_cartographer::run(
+        &input,
+        &support::mini_embeddings(),
+        &support::golden_options(),
+    )
+    .unwrap()
 }
 
 #[test]
@@ -64,7 +69,7 @@ fn the_links_document_records_the_options_it_ran_with() {
     let input = fs::read_to_string(contracts_directory().join("engine-export.v2.json")).unwrap();
     let output = corpus_cartographer::run(
         &input,
-        &support::mini_epicure(),
+        &support::mini_embeddings(),
         &LinkOptions {
             max_links: 1,
             floor: 0.7,

@@ -13,26 +13,26 @@ fn golden_input() -> std::path::PathBuf {
     std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("contracts/engine-export.v2.json")
 }
 
-fn mini_epicure_directory() -> tempfile::TempDir {
+fn mini_embeddings_directory() -> tempfile::TempDir {
     let directory = tempdir().unwrap();
     let rows: Vec<&[f32]> = support::MINI_ROWS
         .iter()
         .map(<[f32; 4]>::as_slice)
         .collect();
-    support::write_epicure(directory.path(), &support::MINI_TERMS, &rows);
+    support::write_embeddings(directory.path(), &support::MINI_TERMS, &rows);
     directory
 }
 
 #[test]
 fn writes_the_three_documents_and_a_summary() {
-    let epicure = mini_epicure_directory();
+    let embeddings = mini_embeddings_directory();
     let out = tempdir().unwrap();
     let result = engine()
         .args([
             "--input",
             golden_input().to_str().unwrap(),
-            "--epicure-dir",
-            epicure.path().to_str().unwrap(),
+            "--embeddings-dir",
+            embeddings.path().to_str().unwrap(),
             "--out-dir",
             out.path().to_str().unwrap(),
         ])
@@ -51,7 +51,7 @@ fn writes_the_three_documents_and_a_summary() {
 
 #[test]
 fn an_invalid_input_fails_without_writing_links() {
-    let epicure = mini_epicure_directory();
+    let embeddings = mini_embeddings_directory();
     let out = tempdir().unwrap();
     let input = out.path().join("bad.json");
     fs::write(&input, r#"{"schema":"other","version":1}"#).unwrap();
@@ -59,8 +59,8 @@ fn an_invalid_input_fails_without_writing_links() {
         .args([
             "--input",
             input.to_str().unwrap(),
-            "--epicure-dir",
-            epicure.path().to_str().unwrap(),
+            "--embeddings-dir",
+            embeddings.path().to_str().unwrap(),
             "--out-dir",
             out.path().to_str().unwrap(),
         ])
@@ -78,7 +78,7 @@ fn a_missing_epicure_names_the_file() {
         .args([
             "--input",
             golden_input().to_str().unwrap(),
-            "--epicure-dir",
+            "--embeddings-dir",
             "/nonexistent",
             "--out-dir",
             out.path().to_str().unwrap(),
@@ -91,14 +91,14 @@ fn a_missing_epicure_names_the_file() {
 
 #[test]
 fn a_negative_floor_is_a_value_not_another_flag() {
-    let epicure = mini_epicure_directory();
+    let embeddings = mini_embeddings_directory();
     let out = tempdir().unwrap();
     let result = engine()
         .args([
             "--input",
             golden_input().to_str().unwrap(),
-            "--epicure-dir",
-            epicure.path().to_str().unwrap(),
+            "--embeddings-dir",
+            embeddings.path().to_str().unwrap(),
             "--out-dir",
             out.path().to_str().unwrap(),
             "--floor",
@@ -115,14 +115,14 @@ fn a_negative_floor_is_a_value_not_another_flag() {
 
 #[test]
 fn a_floor_outside_minus_one_to_one_is_refused() {
-    let epicure = mini_epicure_directory();
+    let embeddings = mini_embeddings_directory();
     let out = tempdir().unwrap();
     let result = engine()
         .args([
             "--input",
             golden_input().to_str().unwrap(),
-            "--epicure-dir",
-            epicure.path().to_str().unwrap(),
+            "--embeddings-dir",
+            embeddings.path().to_str().unwrap(),
             "--out-dir",
             out.path().to_str().unwrap(),
             "--floor",
@@ -157,15 +157,15 @@ fn runs_without_embeddings_when_no_directory_is_given() {
 }
 
 #[test]
-fn embeddings_dir_is_an_alias_of_epicure_dir() {
-    let epicure = mini_epicure_directory();
+fn the_old_epicure_dir_flag_is_an_alias_of_embeddings_dir() {
+    let embeddings = mini_embeddings_directory();
     let out = tempdir().unwrap();
     let result = engine()
         .args([
             "--input",
             golden_input().to_str().unwrap(),
             "--embeddings-dir",
-            epicure.path().to_str().unwrap(),
+            embeddings.path().to_str().unwrap(),
             "--out-dir",
             out.path().to_str().unwrap(),
         ])

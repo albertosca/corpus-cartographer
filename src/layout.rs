@@ -1,13 +1,13 @@
-//! Places territories (top-level themes), sub-themes inside them and recipes
+//! Places territories (top-level themes), sub-themes inside them and items
 //! inside their sub-theme, each level by classical MDS on flavour distance
 //! (1 − cosine); aligns the two theme levels to the previous run; puts what
-//! has no flavour on a ring around its parent and the recipes waiting for
+//! has no flavour on a ring around its parent and the items waiting for
 //! the owner in a row below the map.
 
 use std::collections::BTreeMap;
 use std::f64::consts::TAU;
 
-use crate::epicure::Epicure;
+use crate::embeddings::Embeddings;
 use crate::export::{EngineExport, Positions, Status, Theme};
 use crate::geometry::{align, classical_mds, round_to};
 use crate::vectors::{FlavourSpace, cosine, mean_direction, term_vector};
@@ -26,7 +26,7 @@ const DECIMALS: i32 = 6;
 pub struct Layout {
     pub territories: BTreeMap<u64, [f64; 2]>,
     pub subthemes: BTreeMap<u64, [f64; 2]>,
-    pub recipes: BTreeMap<u64, [f64; 2]>,
+    pub items: BTreeMap<u64, [f64; 2]>,
     pub warnings: Vec<Warning>,
 }
 
@@ -59,22 +59,22 @@ enum Fit {
     Radius(f64),
 }
 
-/// The export indexed for the layout: themes by id, assigned recipes by sub-theme.
+/// The export indexed for the layout: themes by id, assigned items by sub-theme.
 struct Corpus<'a> {
     themes: Vec<&'a Theme>,
     members: BTreeMap<u64, Vec<u64>>,
     space: &'a FlavourSpace,
-    epicure: &'a Epicure,
+    embeddings: &'a Embeddings,
 }
 
 impl<'a> Corpus<'a> {
-    fn new(export: &'a EngineExport, space: &'a FlavourSpace, epicure: &'a Epicure) -> Self {
+    fn new(export: &'a EngineExport, space: &'a FlavourSpace, embeddings: &'a Embeddings) -> Self {
         let mut themes: Vec<&Theme> = export.themes.iter().collect();
         themes.sort_by_key(|theme| theme.id);
         let mut members: BTreeMap<u64, Vec<u64>> = BTreeMap::new();
-        for recipe in &export.recipes {
-            if let (Status::Assigned, Some(subtheme_id)) = (recipe.status, recipe.subtheme_id) {
-                members.entry(subtheme_id).or_default().push(recipe.id);
+        for item in &export.items {
+            if let (Status::Assigned, Some(subtheme_id)) = (item.status, item.subtheme_id) {
+                members.entry(subtheme_id).or_default().push(item.id);
             }
         }
         for ids in members.values_mut() {
@@ -84,7 +84,7 @@ impl<'a> Corpus<'a> {
             themes,
             members,
             space,
-            epicure,
+            embeddings,
         }
     }
 
@@ -103,8 +103,8 @@ impl<'a> Corpus<'a> {
     }
 
     /// The theme as a sibling: its flavour is the mean direction of the assigned
-    /// recipe vectors in `subtheme_ids`, else of its own `epicure_terms` (one
-    /// weight each, centred like the recipes), else none.
+    /// item vectors in `subtheme_ids`, else of its own `terms` (one
+    /// weight each, centred like the items), else none.
     fn sibling(&self, theme: &Theme, subtheme_ids: &[u64]) -> Sibling {
         let vectors: Vec<Vec<f64>> = subtheme_ids
             .iter()
@@ -114,9 +114,9 @@ impl<'a> Corpus<'a> {
             .collect();
         let flavour = mean_direction(vectors.iter().map(Vec::as_slice)).or_else(|| {
             let terms: Vec<Vec<f64>> = theme
-                .epicure_terms
+                .terms
                 .iter()
-                .filter_map(|term| term_vector(self.epicure, term))
+                .filter_map(|term| term_vector(self.embeddings, term))
                 .collect();
             mean_direction(terms.iter().map(Vec::as_slice)).map(|raw| self.space.centre(raw))
         });
@@ -128,8 +128,8 @@ impl<'a> Corpus<'a> {
     }
 }
 
-pub fn lay_out(export: &EngineExport, space: &FlavourSpace, epicure: &Epicure) -> Layout {
-    let corpus = Corpus::new(export, space, epicure);
+pub fn lay_out(export: &EngineExport, space: &FlavourSpace, embeddings: &Embeddings) -> Layout {
+    let corpus = Corpus::new(export, space, embeddings);
     let previous = export.previous.clone().unwrap_or_default();
     let previous_territories = parse_keys(&previous.territories);
     let previous_subthemes = parse_keys(&previous.subthemes);
@@ -238,7 +238,7 @@ fn lay_out_territory(
             territory.point[1] + offset[1],
         ];
         layout.subthemes.insert(subtheme_id, center);
-        lay_out_recipes(
+        lay_out_items(
             corpus,
             &Placed {
                 id: subtheme_id,
@@ -250,8 +250,8 @@ fn lay_out_territory(
     }
 }
 
-fn lay_out_recipes(corpus: &Corpus, subtheme: &Placed, layout: &mut Layout) {
-    let recipe_siblings: Vec<Sibling> = corpus
+fn lay_out_items(corpus: &Corpus, subtheme: &Placed, layout: &mut Layout) {
+    let item_siblings: Vec<Sibling> = corpus
         .members_of(subtheme.id)
         .iter()
         .map(|id| Sibling {
@@ -260,8 +260,8 @@ fn lay_out_recipes(corpus: &Corpus, subtheme: &Placed, layout: &mut Layout) {
             flavour: corpus.space.vector(*id).map(<[f64]>::to_vec),
         })
         .collect();
-    let recipe_offsets = place_siblings(
-        &recipe_siblings,
+    let item_offsets = place_siblings(
+        &item_siblings,
         &Fit::Radius(subtheme.room * FILL_FRACTION),
         subtheme.room * INNER_RING_FRACTION,
         None,
@@ -269,9 +269,9 @@ fn lay_out_recipes(corpus: &Corpus, subtheme: &Placed, layout: &mut Layout) {
         false,
         &mut layout.warnings,
     );
-    for (recipe_id, offset) in recipe_offsets {
-        layout.recipes.insert(
-            recipe_id,
+    for (item_id, offset) in item_offsets {
+        layout.items.insert(
+            item_id,
             [subtheme.point[0] + offset[0], subtheme.point[1] + offset[1]],
         );
     }
@@ -421,17 +421,17 @@ fn place_siblings(
 
 fn place_waiting_row(export: &EngineExport, layout: &mut Layout) {
     let mut waiting: Vec<u64> = export
-        .recipes
+        .items
         .iter()
-        .filter(|recipe| recipe.status != Status::Assigned)
-        .map(|recipe| recipe.id)
+        .filter(|item| item.status != Status::Assigned)
+        .map(|item| item.id)
         .collect();
     waiting.sort_unstable();
     let everything = layout
         .territories
         .values()
         .chain(layout.subthemes.values())
-        .chain(layout.recipes.values());
+        .chain(layout.items.values());
     let (leftmost, lowest) = everything
         .fold((f64::INFINITY, f64::INFINITY), |(left, low), point| {
             (left.min(point[0]), low.min(point[1]))
@@ -442,7 +442,7 @@ fn place_waiting_row(export: &EngineExport, layout: &mut Layout) {
         (0.0, 0.0)
     };
     for (position, id) in waiting.into_iter().enumerate() {
-        layout.recipes.insert(
+        layout.items.insert(
             id,
             [leftmost + position as f64 * ROW_STEP, lowest - ROW_GAP],
         );
@@ -453,7 +453,7 @@ fn round_layout(layout: &mut Layout) {
     for points in [
         &mut layout.territories,
         &mut layout.subthemes,
-        &mut layout.recipes,
+        &mut layout.items,
     ] {
         for point in points.values_mut() {
             *point = [round_to(point[0], DECIMALS), round_to(point[1], DECIMALS)];
@@ -464,14 +464,14 @@ fn round_layout(layout: &mut Layout) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::epicure::Epicure;
+    use crate::embeddings::Embeddings;
     use crate::export::parse;
     use crate::vectors::FlavourSpace;
     use crate::warning::WarningKind;
 
     /// Two opposite flavour corners (beef, lime) and a third (flour).
-    fn epicure() -> Epicure {
-        Epicure::from_rows(
+    fn embeddings() -> Embeddings {
+        Embeddings::from_rows(
             vec!["beef".into(), "flour".into(), "lime".into()],
             vec![1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 1.0, 0.0],
             3,
@@ -479,45 +479,49 @@ mod tests {
     }
 
     const THEMES: &str = r#"[
-        {"id":1,"parent_id":null,"name":"Churrasco","epicure_terms":[]},
-        {"id":2,"parent_id":null,"name":"Massas","epicure_terms":[]},
-        {"id":11,"parent_id":1,"name":"Cortes","epicure_terms":[]},
-        {"id":12,"parent_id":1,"name":"Molhos","epicure_terms":[]},
-        {"id":21,"parent_id":2,"name":"Frescas","epicure_terms":[]}
+        {"id":1,"parent_id":null,"name":"Churrasco","terms":[]},
+        {"id":2,"parent_id":null,"name":"Massas","terms":[]},
+        {"id":11,"parent_id":1,"name":"Cortes","terms":[]},
+        {"id":12,"parent_id":1,"name":"Molhos","terms":[]},
+        {"id":21,"parent_id":2,"name":"Frescas","terms":[]}
     ]"#;
 
-    fn recipe(id: u64, subtheme: Option<u64>, terms: &[&str]) -> String {
+    fn item(id: u64, subtheme: Option<u64>, terms: &[&str]) -> String {
         let (subtheme, status) = subtheme.map_or(("null".to_string(), "needs_owner"), |id| {
             (id.to_string(), "assigned")
         });
-        let ingredients: Vec<String> = terms
+        let item_terms: Vec<String> = terms
             .iter()
-            .map(|term| format!(r#"{{"name":"Synthetic {term}","epicure_term":"{term}"}}"#))
+            .map(|term| format!(r#"{{"label":"Synthetic {term}","term":"{term}"}}"#))
             .collect();
-        let seal = if terms.is_empty() { "none" } else { "complete" };
+        let badges = if terms.is_empty() {
+            r#"["bare"]"#
+        } else {
+            "[]"
+        };
         format!(
-            r#"{{"id":{id},"title":"Synthetic {id}","subtheme_id":{subtheme},"status":"{status}","seal":"{seal}","ingredients":[{}]}}"#,
-            ingredients.join(",")
+            r#"{{"id":{id},"title":"Synthetic {id}","subtheme_id":{subtheme},"status":"{status}","badges":{badges},"terms":[{}]}}"#,
+            item_terms.join(",")
         )
     }
 
-    fn layout_of(themes: &str, recipes: &[String], previous: &str) -> Layout {
+    fn layout_of(themes: &str, items: &[String], previous: &str) -> Layout {
         let text = format!(
-            r#"{{"schema":"recipes-cartographer/engine-export","version":2,"taxonomy_version":1,"themes":{themes},"recipes":[{}],"previous":{previous},"rejected_pairs":[]}}"#,
-            recipes.join(",")
+            r#"{{"schema":"corpus-cartographer/engine-export","version":3,"taxonomy_version":1,"themes":{themes},"items":[{}],"previous":{previous},"rejected_pairs":[]}}"#,
+            items.join(",")
         );
-        let export = parse(&text).unwrap();
-        let epicure = epicure();
-        let space = FlavourSpace::build(&export.recipes, &epicure);
-        lay_out(&export, &space, &epicure)
+        let (export, _format) = parse(&text).unwrap();
+        let embeddings = embeddings();
+        let space = FlavourSpace::build(&export.items, &embeddings);
+        lay_out(&export, &space, &embeddings)
     }
 
-    fn base_recipes() -> Vec<String> {
+    fn base_items() -> Vec<String> {
         vec![
-            recipe(101, Some(11), &["beef"]),
-            recipe(102, Some(12), &["beef", "lime"]),
-            recipe(103, Some(21), &["flour"]),
-            recipe(104, Some(21), &["flour", "lime"]),
+            item(101, Some(11), &["beef"]),
+            item(102, Some(12), &["beef", "lime"]),
+            item(103, Some(21), &["flour"]),
+            item(104, Some(21), &["flour", "lime"]),
         ]
     }
 
@@ -526,8 +530,8 @@ mod tests {
     }
 
     #[test]
-    fn sub_themes_and_recipes_stay_inside_their_territory() {
-        let layout = layout_of(THEMES, &base_recipes(), "null");
+    fn sub_themes_and_items_stay_inside_their_territory() {
+        let layout = layout_of(THEMES, &base_items(), "null");
         let gap = distance(layout.territories[&1], layout.territories[&2]);
         let room = gap * 0.35;
         for (subtheme, territory) in [(11, 1), (12, 1), (21, 2)] {
@@ -537,41 +541,41 @@ mod tests {
                 "sub-theme {subtheme}"
             );
         }
-        for (recipe, territory) in [(101, 1), (102, 1), (103, 2), (104, 2)] {
+        for (item, territory) in [(101, 1), (102, 1), (103, 2), (104, 2)] {
             assert!(
-                distance(layout.recipes[&recipe], layout.territories[&territory]) < gap / 2.0,
-                "recipe {recipe}"
+                distance(layout.items[&item], layout.territories[&territory]) < gap / 2.0,
+                "item {item}"
             );
         }
         assert!(layout.warnings.is_empty(), "{:?}", layout.warnings);
     }
 
     #[test]
-    fn title_only_recipes_neither_weigh_nor_gather() {
-        // Backlog 17 (f), the spec's synthetic gate: ten title-only recipes spread over sub-themes.
-        let mut with_title_only = base_recipes();
+    fn title_only_items_neither_weigh_nor_gather() {
+        // Backlog 17 (f), the spec's synthetic gate: ten title-only items spread over sub-themes.
+        let mut with_title_only = base_items();
         for (offset, subtheme) in [11, 12, 21, 11, 12, 21, 11, 12, 21, 21]
             .into_iter()
             .enumerate()
         {
-            with_title_only.push(recipe(200 + offset as u64, Some(subtheme), &[]));
+            with_title_only.push(item(200 + offset as u64, Some(subtheme), &[]));
         }
-        let without = layout_of(THEMES, &base_recipes(), "null");
+        let without = layout_of(THEMES, &base_items(), "null");
         let with = layout_of(THEMES, &with_title_only, "null");
 
         assert_eq!(
             with.territories, without.territories,
-            "title-only recipes moved a territory"
+            "title-only items moved a territory"
         );
         assert_eq!(
             with.subthemes, without.subthemes,
-            "title-only recipes moved a sub-theme"
+            "title-only items moved a sub-theme"
         );
         for (offset, subtheme) in [11, 12, 21, 11, 12, 21, 11, 12, 21, 21]
             .into_iter()
             .enumerate()
         {
-            let position = with.recipes[&(200 + offset as u64)];
+            let position = with.items[&(200 + offset as u64)];
             let own = distance(position, with.subthemes[&subtheme]);
             let nearest_other = with
                 .subthemes
@@ -581,24 +585,24 @@ mod tests {
                 .fold(f64::INFINITY, f64::min);
             assert!(
                 own < nearest_other,
-                "title-only recipe {} sits nearer another sub-theme",
+                "title-only item {} sits nearer another sub-theme",
                 200 + offset
             );
         }
     }
 
     #[test]
-    fn unassigned_recipes_wait_in_a_row_below_the_map() {
-        let mut recipes = base_recipes();
-        recipes.push(recipe(301, None, &["beef"]));
-        recipes.push(recipe(300, None, &[]));
-        let layout = layout_of(THEMES, &recipes, "null");
+    fn unassigned_items_wait_in_a_row_below_the_map() {
+        let mut items = base_items();
+        items.push(item(301, None, &["beef"]));
+        items.push(item(300, None, &[]));
+        let layout = layout_of(THEMES, &items, "null");
 
         let lowest_placed = [101, 102, 103, 104]
             .iter()
-            .map(|id| layout.recipes[id][1])
+            .map(|id| layout.items[id][1])
             .fold(f64::INFINITY, f64::min);
-        let (first, second) = (layout.recipes[&300], layout.recipes[&301]);
+        let (first, second) = (layout.items[&300], layout.items[&301]);
         assert!(first[1] < lowest_placed && (first[1] - second[1]).abs() < 1e-9);
         assert!(first[0] < second[0], "the row is ordered by id");
     }
@@ -607,9 +611,9 @@ mod tests {
     fn a_theme_without_flavour_goes_on_the_ring_with_a_warning() {
         let themes = THEMES.replace(
             r#"{"id":21,"#,
-            r#"{"id":31,"parent_id":null,"name":"Doces","epicure_terms":[]},{"id":21,"#,
+            r#"{"id":31,"parent_id":null,"name":"Doces","terms":[]},{"id":21,"#,
         );
-        let layout = layout_of(&themes, &base_recipes(), "null");
+        let layout = layout_of(&themes, &base_items(), "null");
 
         let farthest = [1, 2]
             .iter()
@@ -629,9 +633,9 @@ mod tests {
     fn a_theme_falls_back_to_its_own_terms() {
         let themes = THEMES.replace(
             r#"{"id":21,"#,
-            r#"{"id":31,"parent_id":null,"name":"Doces","epicure_terms":["flour"]},{"id":21,"#,
+            r#"{"id":31,"parent_id":null,"name":"Doces","terms":["flour"]},{"id":21,"#,
         );
-        let layout = layout_of(&themes, &base_recipes(), "null");
+        let layout = layout_of(&themes, &base_items(), "null");
         assert!(
             !layout
                 .warnings
@@ -644,50 +648,50 @@ mod tests {
 
     #[test]
     fn a_theme_that_falls_back_to_its_terms_is_centred_like_its_siblings() {
-        // Sub-theme 11 holds one beef recipe; theme 31 has no recipes and
+        // Sub-theme 11 holds one beef item; theme 31 has no items and
         // the term beef, so both flavours must be the same direction.
         let themes = THEMES.replace(
             r#"{"id":21,"#,
-            r#"{"id":31,"parent_id":1,"name":"Brasa","epicure_terms":["beef"]},{"id":21,"#,
+            r#"{"id":31,"parent_id":1,"name":"Brasa","terms":["beef"]},{"id":21,"#,
         );
         let text = format!(
-            r#"{{"schema":"recipes-cartographer/engine-export","version":2,"taxonomy_version":1,"themes":{themes},"recipes":[{}],"previous":null,"rejected_pairs":[]}}"#,
-            base_recipes().join(",")
+            r#"{{"schema":"corpus-cartographer/engine-export","version":3,"taxonomy_version":1,"themes":{themes},"items":[{}],"previous":null,"rejected_pairs":[]}}"#,
+            base_items().join(",")
         );
-        let export = parse(&text).unwrap();
-        let epicure = epicure();
-        let space = FlavourSpace::build(&export.recipes, &epicure);
-        assert!(space.mean.is_some(), "four recipes are centred");
-        let corpus = Corpus::new(&export, &space, &epicure);
+        let (export, _format) = parse(&text).unwrap();
+        let embeddings = embeddings();
+        let space = FlavourSpace::build(&export.items, &embeddings);
+        assert!(space.mean.is_some(), "four items are centred");
+        let corpus = Corpus::new(&export, &space, &embeddings);
         let theme = |id: u64| *corpus.themes.iter().find(|theme| theme.id == id).unwrap();
 
-        let from_recipes = corpus.sibling(theme(11), &[11]).flavour.unwrap();
+        let from_items = corpus.sibling(theme(11), &[11]).flavour.unwrap();
         let from_terms = corpus.sibling(theme(31), &[31]).flavour.unwrap();
         assert!(
-            cosine(&from_recipes, &from_terms) > 1.0 - 1e-9,
-            "{from_recipes:?} {from_terms:?}"
+            cosine(&from_items, &from_terms) > 1.0 - 1e-9,
+            "{from_items:?} {from_terms:?}"
         );
     }
 
     #[test]
     fn a_theme_that_falls_back_to_several_terms_weighs_each_term_once() {
-        // Beef is in three recipes and lime in one, so their rarity weights
+        // Beef is in three items and lime in one, so their rarity weights
         // differ; the theme's own terms still count one each.
         let themes = THEMES.replace(
             r#"{"id":21,"#,
-            r#"{"id":31,"parent_id":1,"name":"Brasa","epicure_terms":["beef","lime"]},{"id":21,"#,
+            r#"{"id":31,"parent_id":1,"name":"Brasa","terms":["beef","lime"]},{"id":21,"#,
         );
-        let mut recipes = base_recipes();
-        recipes.push(recipe(105, Some(21), &["beef"]));
+        let mut items = base_items();
+        items.push(item(105, Some(21), &["beef"]));
         let text = format!(
-            r#"{{"schema":"recipes-cartographer/engine-export","version":2,"taxonomy_version":1,"themes":{themes},"recipes":[{}],"previous":null,"rejected_pairs":[]}}"#,
-            recipes.join(",")
+            r#"{{"schema":"corpus-cartographer/engine-export","version":3,"taxonomy_version":1,"themes":{themes},"items":[{}],"previous":null,"rejected_pairs":[]}}"#,
+            items.join(",")
         );
-        let export = parse(&text).unwrap();
-        let epicure = epicure();
-        let space = FlavourSpace::build(&export.recipes, &epicure);
+        let (export, _format) = parse(&text).unwrap();
+        let embeddings = embeddings();
+        let space = FlavourSpace::build(&export.items, &embeddings);
         assert!(space.weight("beef") < space.weight("lime"));
-        let corpus = Corpus::new(&export, &space, &epicure);
+        let corpus = Corpus::new(&export, &space, &embeddings);
         let theme = *corpus.themes.iter().find(|theme| theme.id == 31).unwrap();
 
         let flavour = corpus.sibling(theme, &[31]).flavour.unwrap();
@@ -701,7 +705,7 @@ mod tests {
 
     #[test]
     fn the_previous_run_fixes_the_orientation() {
-        let first = layout_of(THEMES, &base_recipes(), "null");
+        let first = layout_of(THEMES, &base_items(), "null");
         // Rotate the first map by 90 degrees and hand it back as the previous run.
         let turned: Vec<String> = first
             .territories
@@ -713,7 +717,7 @@ mod tests {
             turned.join(",")
         );
 
-        let second = layout_of(THEMES, &base_recipes(), &previous);
+        let second = layout_of(THEMES, &base_items(), &previous);
 
         for (id, point) in &first.territories {
             let expected = [-point[1], point[0]];
@@ -728,7 +732,7 @@ mod tests {
     fn stale_previous_ids_are_ignored() {
         let previous =
             r#"{"territories":{"1":[0.0,0.0],"99":[50.0,50.0]},"subthemes":{"98":[1.0,1.0]}}"#;
-        let layout = layout_of(THEMES, &base_recipes(), previous);
+        let layout = layout_of(THEMES, &base_items(), previous);
         assert!(
             layout
                 .warnings
@@ -743,7 +747,7 @@ mod tests {
     fn a_previous_run_with_no_positions_is_a_first_run_not_a_misalignment() {
         let layout = layout_of(
             THEMES,
-            &base_recipes(),
+            &base_items(),
             r#"{"territories":{},"subthemes":{}}"#,
         );
         assert!(
@@ -759,17 +763,17 @@ mod tests {
     #[test]
     fn edge_corpora_lay_out_without_panicking() {
         let empty = layout_of("[]", &[], "null");
-        assert!(empty.territories.is_empty() && empty.recipes.is_empty());
+        assert!(empty.territories.is_empty() && empty.items.is_empty());
 
-        let one = layout_of(THEMES, &[recipe(101, Some(11), &["beef"])], "null");
-        assert_eq!(one.recipes.len(), 1);
+        let one = layout_of(THEMES, &[item(101, Some(11), &["beef"])], "null");
+        assert_eq!(one.items.len(), 1);
 
         let waiting = layout_of(
             THEMES,
-            &[recipe(301, None, &["beef"]), recipe(302, None, &[])],
+            &[item(301, None, &["beef"]), item(302, None, &[])],
             "null",
         );
-        assert_eq!(waiting.recipes.len(), 2);
+        assert_eq!(waiting.items.len(), 2);
         assert!(
             waiting
                 .warnings
@@ -780,14 +784,14 @@ mod tests {
 
     #[test]
     fn input_order_does_not_change_the_layout() {
-        let mut reversed = base_recipes();
+        let mut reversed = base_items();
         reversed.reverse();
         let themes_reversed = {
             let themes: Vec<serde_json::Value> = serde_json::from_str(THEMES).unwrap();
             serde_json::to_string(&themes.into_iter().rev().collect::<Vec<_>>()).unwrap()
         };
         assert_eq!(
-            layout_of(THEMES, &base_recipes(), "null"),
+            layout_of(THEMES, &base_items(), "null"),
             layout_of(&themes_reversed, &reversed, "null")
         );
     }

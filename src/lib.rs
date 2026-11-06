@@ -1,9 +1,10 @@
-//! The recipes-cartographer map engine: layout, flavour links and the map spec.
+//! The corpus-cartographer map engine: layout, links between items and the map spec.
 
-pub mod epicure;
+pub mod embeddings;
 pub mod export;
 pub mod geometry;
 pub mod layout;
+pub mod legacy_v2;
 pub mod links;
 pub mod output;
 pub mod vectors;
@@ -13,7 +14,7 @@ use std::fmt::Write;
 
 use sha2::{Digest, Sha256};
 
-use crate::epicure::Epicure;
+use crate::embeddings::Embeddings;
 use crate::export::ExportError;
 use crate::links::LinkOptions;
 use crate::output::Counts;
@@ -34,11 +35,11 @@ const MAXIMUM_AXIS_CELLS: usize = 4_000_000;
 /// Everything the binary does except reading and writing files.
 pub fn run(
     input_text: &str,
-    epicure: &Epicure,
+    embeddings: &Embeddings,
     options: &LinkOptions,
 ) -> Result<EngineOutput, ExportError> {
-    let export = export::parse(input_text)?;
-    Ok(build(input_text, &export, epicure, options))
+    let (export, _format) = export::parse(input_text)?;
+    Ok(build(input_text, &export, embeddings, options))
 }
 
 /// `run` for a corpus with no embeddings: each term the export names becomes
@@ -47,21 +48,16 @@ pub fn run_without_embeddings(
     input_text: &str,
     options: &LinkOptions,
 ) -> Result<EngineOutput, NoEmbeddingsError> {
-    let export = export::parse(input_text)?;
+    let (export, _format) = export::parse(input_text)?;
     let terms = export.terms();
     let items_with_terms = export
-        .recipes
+        .items
         .iter()
-        .filter(|recipe| {
-            recipe
-                .ingredients
-                .iter()
-                .any(|ingredient| ingredient.epicure_term.is_some())
-        })
+        .filter(|item| item.terms.iter().any(|item_term| item_term.term.is_some()))
         .count();
     check_axis_budget(terms.len(), items_with_terms)?;
-    let epicure = Epicure::one_axis_per_term(terms.into_iter().collect());
-    Ok(build(input_text, &export, &epicure, options))
+    let embeddings = Embeddings::one_axis_per_term(terms.into_iter().collect());
+    Ok(build(input_text, &export, &embeddings, options))
 }
 
 /// Layout and links grow roughly with the cube of the corpus (measured: 1000
@@ -109,7 +105,7 @@ impl From<ExportError> for NoEmbeddingsError {
 fn build(
     input_text: &str,
     export: &export::EngineExport,
-    epicure: &Epicure,
+    embeddings: &Embeddings,
     options: &LinkOptions,
 ) -> EngineOutput {
     let input_sha256 = Sha256::digest(input_text.as_bytes()).iter().fold(
@@ -119,15 +115,15 @@ fn build(
             hex
         },
     );
-    let space = FlavourSpace::build(&export.recipes, epicure);
-    let mut layout = layout::lay_out(export, &space, epicure);
+    let space = FlavourSpace::build(&export.items, embeddings);
+    let mut layout = layout::lay_out(export, &space, embeddings);
     if space.unknown_terms > 0 {
         layout
             .warnings
             .push(Warning::unknown_terms(space.unknown_terms));
         layout.warnings.sort();
     }
-    let links = links::find_links(export, &space, epicure, options);
+    let links = links::find_links(export, &space, embeddings, options);
     let counts = Counts::of(export, &space, &links);
     EngineOutput {
         links_json: output::links_json(&input_sha256, &layout, &links, counts, options),
@@ -135,7 +131,7 @@ fn build(
         map_spec_nested: output::map_spec_nested(export, &layout, &links),
         summary: format!(
             "recipes={} placed={} waiting={} with_vector={} links={} warnings={}",
-            counts.recipes,
+            counts.items,
             counts.placed,
             counts.waiting,
             counts.with_vector,

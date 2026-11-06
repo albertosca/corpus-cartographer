@@ -68,7 +68,7 @@ pub fn symmetric_eigen(matrix: &[Vec<f64>]) -> Vec<Eigenpair> {
 }
 
 /// One Jacobi rotation zeroing `working[pivot_row][pivot_column]`
-/// (Numerical Recipes' tangent form), applied to both sides of `working`
+/// (Numerical Items' tangent form), applied to both sides of `working`
 /// and to the columns of `basis`.
 fn rotate(working: &mut [Vec<f64>], basis: &mut [Vec<f64>], pivot_row: usize, pivot_column: usize) {
     let pivot = working[pivot_row][pivot_column];

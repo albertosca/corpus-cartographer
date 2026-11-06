@@ -1,13 +1,23 @@
-//! The engine's input, written by the Rails app (`Export::EngineExport`) and
-//! pinned by contracts/engine-export.v2.schema.json and its golden.
+//! The engine's input, written by the host application and pinned by
+//! contracts/engine-export.v3.schema.json and its golden. Export v2, the
+//! item-era wire format, is still read through `legacy_v2`.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
 
 use serde::{Deserialize, Serialize};
 
-pub const SCHEMA: &str = "recipes-cartographer/engine-export";
-pub const VERSION: u32 = 2;
+use crate::legacy_v2;
+
+pub const SCHEMA: &str = "corpus-cartographer/engine-export";
+pub const VERSION: u32 = 3;
+
+/// Which wire format a document used. The engine answers in the same one.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Format {
+    V2,
+    V3,
+}
 
 #[derive(Debug, Clone, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -16,9 +26,9 @@ pub struct EngineExport {
     pub version: u32,
     pub taxonomy_version: Option<u64>,
     pub themes: Vec<Theme>,
-    pub recipes: Vec<Recipe>,
+    pub items: Vec<Item>,
     pub previous: Option<Positions>,
-    /// Recipe pairs the owner hid, each `[low, high]` with `low < high`.
+    /// Item pairs the owner hid, each `[low, high]` with `low < high`.
     pub rejected_pairs: Vec<[u64; 2]>,
 }
 
@@ -28,18 +38,19 @@ pub struct Theme {
     pub id: u64,
     pub parent_id: Option<u64>,
     pub name: String,
-    pub epicure_terms: Vec<String>,
+    pub terms: Vec<String>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct Recipe {
+pub struct Item {
     pub id: u64,
     pub title: String,
     pub subtheme_id: Option<u64>,
     pub status: Status,
-    pub seal: Seal,
-    pub ingredients: Vec<Ingredient>,
+    /// Short texts the producer wants shown on the item's map node.
+    pub badges: Vec<String>,
+    pub terms: Vec<ItemTerm>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
@@ -50,23 +61,17 @@ pub enum Status {
     Unclassified,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum Seal {
-    Complete,
-    Absent,
-    None,
-}
-
+/// A term of an item: the producer's own `label` for it, and the `term` it
+/// maps to in the embeddings (absent when it maps to none).
 #[derive(Debug, Clone, Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct Ingredient {
-    pub name: String,
-    pub epicure_term: Option<String>,
+pub struct ItemTerm {
+    pub label: String,
+    pub term: Option<String>,
 }
 
 /// Positions of the theme levels, keyed by theme id as a decimal string
-/// (JSON object keys are strings). Sent back by Rails from the last run.
+/// (JSON object keys are strings). Sent back by the host from the last run.
 #[derive(Debug, Clone, Default, PartialEq, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct Positions {
@@ -93,37 +98,40 @@ struct Header {
     version: u32,
 }
 
-pub fn parse(text: &str) -> Result<EngineExport, ExportError> {
+pub fn parse(text: &str) -> Result<(EngineExport, Format), ExportError> {
     let header: Header =
         serde_json::from_str(text).map_err(|error| ExportError(error.to_string()))?;
-    check_version(&header.schema, header.version)?;
-    let export: EngineExport =
-        serde_json::from_str(text).map_err(|error| ExportError(error.to_string()))?;
+    let (export, format) = match (header.schema.as_str(), header.version) {
+        (SCHEMA, VERSION) => (
+            serde_json::from_str::<EngineExport>(text)
+                .map_err(|error| ExportError(error.to_string()))?,
+            Format::V3,
+        ),
+        (legacy_v2::SCHEMA, legacy_v2::VERSION) => (legacy_v2::parse(text)?, Format::V2),
+        (schema, version) => {
+            return Err(ExportError(format!(
+                "expected {SCHEMA} version {VERSION} or {} version {}, found {schema} version {version}",
+                legacy_v2::SCHEMA,
+                legacy_v2::VERSION
+            )));
+        }
+    };
     export.validate()?;
-    Ok(export)
-}
-
-fn check_version(schema: &str, version: u32) -> Result<(), ExportError> {
-    if schema == SCHEMA && version == VERSION {
-        return Ok(());
-    }
-    Err(ExportError(format!(
-        "expected {SCHEMA} version {VERSION}, found {schema} version {version}; the app and the engine disagree, run bin/setup-engine"
-    )))
+    Ok((export, format))
 }
 
 impl EngineExport {
     /// Every term the corpus names, in the items and in the themes, sorted.
     pub fn terms(&self) -> BTreeSet<String> {
         let from_items = self
-            .recipes
+            .items
             .iter()
-            .flat_map(|recipe| &recipe.ingredients)
-            .filter_map(|ingredient| ingredient.epicure_term.clone());
+            .flat_map(|item| &item.terms)
+            .filter_map(|term| term.term.clone());
         let from_themes = self
             .themes
             .iter()
-            .flat_map(|theme| theme.epicure_terms.iter().cloned());
+            .flat_map(|theme| theme.terms.iter().cloned());
         from_items.chain(from_themes).collect()
     }
 
@@ -170,30 +178,30 @@ impl EngineExport {
                 }
             }
         }
-        let mut recipe_ids = BTreeSet::new();
-        for recipe in &self.recipes {
-            if !recipe_ids.insert(recipe.id) {
-                return Err(ExportError(format!("recipe {} appears twice", recipe.id)));
+        let mut item_ids = BTreeSet::new();
+        for item in &self.items {
+            if !item_ids.insert(item.id) {
+                return Err(ExportError(format!("item {} appears twice", item.id)));
             }
-            match (recipe.status, recipe.subtheme_id) {
+            match (item.status, item.subtheme_id) {
                 (Status::Assigned, Some(subtheme_id)) => {
                     if !matches!(parent_by_theme.get(&subtheme_id), Some(Some(_))) {
                         return Err(ExportError(format!(
-                            "recipe {}: {subtheme_id} is not a sub-theme",
-                            recipe.id
+                            "item {}: {subtheme_id} is not a sub-theme",
+                            item.id
                         )));
                     }
                 }
                 (Status::Assigned, None) => {
                     return Err(ExportError(format!(
-                        "recipe {}: assigned without a sub-theme",
-                        recipe.id
+                        "item {}: assigned without a sub-theme",
+                        item.id
                     )));
                 }
                 (_, Some(_)) => {
                     return Err(ExportError(format!(
-                        "recipe {}: only an assigned recipe has a sub-theme",
-                        recipe.id
+                        "item {}: only an assigned item has a sub-theme",
+                        item.id
                     )));
                 }
                 (_, None) => {}
@@ -214,17 +222,17 @@ impl EngineExport {
 mod tests {
     use super::*;
 
-    fn export_with(themes: &str, recipes: &str) -> String {
+    fn export_with(themes: &str, items: &str) -> String {
         format!(
-            r#"{{"schema":"{SCHEMA}","version":2,"taxonomy_version":null,"themes":{themes},"recipes":{recipes},"previous":null,"rejected_pairs":[]}}"#
+            r#"{{"schema":"{SCHEMA}","version":3,"taxonomy_version":null,"themes":{themes},"items":{items},"previous":null,"rejected_pairs":[]}}"#
         )
     }
 
-    const THEMES: &str = r#"[{"id":1,"parent_id":null,"name":"Top","epicure_terms":[]},{"id":2,"parent_id":1,"name":"Sub","epicure_terms":[]}]"#;
+    const THEMES: &str = r#"[{"id":1,"parent_id":null,"name":"Top","terms":[]},{"id":2,"parent_id":1,"name":"Sub","terms":[]}]"#;
 
-    fn recipe(id: u64, subtheme: &str, status: &str) -> String {
+    fn item(id: u64, subtheme: &str, status: &str) -> String {
         format!(
-            r#"{{"id":{id},"title":"Synthetic","subtheme_id":{subtheme},"status":"{status}","seal":"complete","ingredients":[]}}"#
+            r#"{{"id":{id},"title":"Synthetic","subtheme_id":{subtheme},"status":"{status}","badges":[],"terms":[]}}"#
         )
     }
 
@@ -236,40 +244,42 @@ mod tests {
     }
 
     #[test]
-    fn an_assigned_recipe_in_a_sub_theme_parses() {
-        let export = parse(&export_with(
+    fn an_assigned_item_in_a_sub_theme_parses() {
+        let (export, _format) = parse(&export_with(
             THEMES,
-            &format!("[{}]", recipe(5, "2", "assigned")),
+            &format!("[{}]", item(5, "2", "assigned")),
         ))
         .unwrap();
-        assert_eq!(export.recipes[0].status, Status::Assigned);
+        assert_eq!(export.items[0].status, Status::Assigned);
         assert_eq!(export.top_level_of(2), Some(1));
         assert_eq!(export.top_level_of(1), None);
     }
 
     #[test]
-    fn another_version_is_refused_naming_setup_engine() {
-        let text = export_with(THEMES, "[]").replace(r#""version":2"#, r#""version":1"#);
+    fn another_version_is_refused_naming_both_accepted_ones() {
+        let text = export_with(THEMES, "[]").replace(r#""version":3"#, r#""version":1"#);
         let error = error_of(&text);
-        assert!(error.contains("version 1"), "{error}");
-        assert!(error.contains("bin/setup-engine"), "{error}");
+        assert!(
+            error.contains("found corpus-cartographer/engine-export version 1"),
+            "{error}"
+        );
+        assert!(error.contains("version 3 or"), "{error}");
+        assert!(error.contains("engine-export version 2"), "{error}");
     }
 
-    // A real v1 export has no rejected_pairs, and a later version may add a
-    // field: the version is checked before the shape, or serde would name
-    // the field instead of the fix.
+    // A later version may add fields: the version is checked before the
+    // shape, or serde would name the field instead of the version.
     #[test]
-    fn a_v1_export_or_a_later_one_with_new_fields_names_setup_engine() {
-        let version_one = export_with(THEMES, "[]")
-            .replace(r#""version":2"#, r#""version":1"#)
-            .replace(r#","rejected_pairs":[]"#, "");
-        let version_three = export_with(THEMES, "[]")
-            .replace(r#""version":2"#, r#""version":3"#)
+    fn a_later_version_with_new_fields_names_the_versions_not_the_field() {
+        let text = export_with(THEMES, "[]")
+            .replace(r#""version":3"#, r#""version":4"#)
             .replace(r#""previous":null"#, r#""previous":null,"new_field":true"#);
-        for text in [version_one, version_three] {
-            let error = error_of(&text);
-            assert!(error.contains("bin/setup-engine"), "{error}");
-        }
+        let error = error_of(&text);
+        assert!(
+            error.contains("version 4") && error.contains("version 3 or"),
+            "{error}"
+        );
+        assert!(!error.contains("new_field"), "{error}");
     }
 
     #[test]
@@ -303,7 +313,7 @@ mod tests {
             r#""rejected_pairs":[]"#,
             r#""rejected_pairs":[[3,7],[1,2]]"#,
         );
-        let export = parse(&text).unwrap();
+        let (export, _format) = parse(&text).unwrap();
         assert_eq!(
             export.rejected_set().into_iter().collect::<Vec<_>>(),
             vec![(1, 2), (3, 7)]
@@ -319,30 +329,30 @@ mod tests {
 
     #[test]
     fn a_duplicate_theme_id_is_refused() {
-        let themes = r#"[{"id":1,"parent_id":null,"name":"A","epicure_terms":[]},{"id":1,"parent_id":null,"name":"B","epicure_terms":[]}]"#;
+        let themes = r#"[{"id":1,"parent_id":null,"name":"A","terms":[]},{"id":1,"parent_id":null,"name":"B","terms":[]}]"#;
         assert!(error_of(&export_with(themes, "[]")).contains("theme 1"));
     }
 
     #[test]
     fn a_parent_that_is_itself_a_sub_theme_is_refused() {
-        let themes = r#"[{"id":1,"parent_id":null,"name":"A","epicure_terms":[]},{"id":2,"parent_id":1,"name":"B","epicure_terms":[]},{"id":3,"parent_id":2,"name":"C","epicure_terms":[]}]"#;
+        let themes = r#"[{"id":1,"parent_id":null,"name":"A","terms":[]},{"id":2,"parent_id":1,"name":"B","terms":[]},{"id":3,"parent_id":2,"name":"C","terms":[]}]"#;
         assert!(error_of(&export_with(themes, "[]")).contains("theme 3"));
     }
 
     #[test]
     fn an_unknown_parent_is_refused() {
-        let themes = r#"[{"id":2,"parent_id":9,"name":"B","epicure_terms":[]}]"#;
+        let themes = r#"[{"id":2,"parent_id":9,"name":"B","terms":[]}]"#;
         assert!(error_of(&export_with(themes, "[]")).contains("unknown parent 9"));
     }
 
     #[test]
-    fn a_duplicate_recipe_id_is_refused() {
-        let recipes = format!(
+    fn a_duplicate_item_id_is_refused() {
+        let items = format!(
             "[{},{}]",
-            recipe(5, "null", "needs_owner"),
-            recipe(5, "null", "unclassified")
+            item(5, "null", "needs_owner"),
+            item(5, "null", "unclassified")
         );
-        assert!(error_of(&export_with(THEMES, &recipes)).contains("recipe 5"));
+        assert!(error_of(&export_with(THEMES, &items)).contains("item 5"));
     }
 
     #[test]
@@ -354,9 +364,9 @@ mod tests {
             ("2", "needs_owner"),
             ("2", "unclassified"),
         ] {
-            let text = export_with(THEMES, &format!("[{}]", recipe(5, subtheme, status)));
+            let text = export_with(THEMES, &format!("[{}]", item(5, subtheme, status)));
             assert!(
-                error_of(&text).contains("recipe 5"),
+                error_of(&text).contains("item 5"),
                 "{subtheme} {status}: {}",
                 error_of(&text)
             );

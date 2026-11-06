@@ -1,4 +1,4 @@
-//! Reads Kaikaku/epicure-core the way its Python loader does: one f32 tensor
+//! Reads Kaikaku/embeddings-core the way its Python loader does: one f32 tensor
 //! named "embeddings" whose rows follow vocab.json, each row divided by
 //! max(norm, 1e-9) so cosine similarity is a dot product.
 
@@ -13,17 +13,17 @@ const MINIMUM_NORM: f32 = 1e-9;
 const TENSOR_NAME: &str = "embeddings";
 
 #[derive(Debug)]
-pub struct EpicureError(pub String);
+pub struct EmbeddingsError(pub String);
 
-impl fmt::Display for EpicureError {
+impl fmt::Display for EmbeddingsError {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(formatter, "epicure: {}", self.0)
+        write!(formatter, "embeddings: {}", self.0)
     }
 }
 
-impl std::error::Error for EpicureError {}
+impl std::error::Error for EmbeddingsError {}
 
-pub struct Epicure {
+pub struct Embeddings {
     dimension: usize,
     terms: Vec<String>,
     index_by_term: HashMap<String, usize>,
@@ -31,20 +31,20 @@ pub struct Epicure {
     one_axis_per_term: bool,
 }
 
-impl Epicure {
-    pub fn load(directory: &Path) -> Result<Self, EpicureError> {
+impl Embeddings {
+    pub fn load(directory: &Path) -> Result<Self, EmbeddingsError> {
         let vocabulary_path = directory.join("vocab.json");
         let vocabulary_text = fs::read_to_string(&vocabulary_path)
-            .map_err(|error| EpicureError(format!("{}: {error}", vocabulary_path.display())))?;
+            .map_err(|error| EmbeddingsError(format!("{}: {error}", vocabulary_path.display())))?;
         let index_by_term: HashMap<String, usize> = serde_json::from_str(&vocabulary_text)
-            .map_err(|error| EpicureError(format!("vocab.json: {error}")))?;
+            .map_err(|error| EmbeddingsError(format!("vocab.json: {error}")))?;
         let mut slots: Vec<Option<String>> = vec![None; index_by_term.len()];
         for (term, &index) in &index_by_term {
             let slot = slots.get_mut(index).ok_or_else(|| {
-                EpicureError(format!("vocab.json: index {index} is out of range"))
+                EmbeddingsError(format!("vocab.json: index {index} is out of range"))
             })?;
             if slot.replace(term.clone()).is_some() {
-                return Err(EpicureError(format!(
+                return Err(EmbeddingsError(format!(
                     "vocab.json: index {index} is used twice"
                 )));
             }
@@ -53,26 +53,26 @@ impl Epicure {
 
         let weights_path = directory.join("embeddings.safetensors");
         let bytes = fs::read(&weights_path)
-            .map_err(|error| EpicureError(format!("{}: {error}", weights_path.display())))?;
+            .map_err(|error| EmbeddingsError(format!("{}: {error}", weights_path.display())))?;
         let tensors = SafeTensors::deserialize(&bytes)
-            .map_err(|error| EpicureError(format!("embeddings.safetensors: {error}")))?;
+            .map_err(|error| EmbeddingsError(format!("embeddings.safetensors: {error}")))?;
         let view = tensors
             .tensor(TENSOR_NAME)
-            .map_err(|error| EpicureError(format!("embeddings.safetensors: {error}")))?;
+            .map_err(|error| EmbeddingsError(format!("embeddings.safetensors: {error}")))?;
         if view.dtype() != Dtype::F32 {
-            return Err(EpicureError(format!(
+            return Err(EmbeddingsError(format!(
                 "expected f32 weights, found {:?}",
                 view.dtype()
             )));
         }
         let &[rows, dimension] = view.shape() else {
-            return Err(EpicureError(format!(
+            return Err(EmbeddingsError(format!(
                 "expected a 2-d tensor, found shape {:?}",
                 view.shape()
             )));
         };
         if rows != terms.len() || dimension == 0 {
-            return Err(EpicureError(format!(
+            return Err(EmbeddingsError(format!(
                 "the tensor has {rows} rows of {dimension} values but vocab.json has {} terms",
                 terms.len()
             )));

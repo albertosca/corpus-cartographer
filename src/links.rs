@@ -1,13 +1,13 @@
-//! Flavour links between recipes: cosine between recipe vectors, at most
-//! `max_links` per recipe above `floor`, other territories first. Each link
-//! says why, in the ingredient names the cook used. A pair the owner hid is
+//! Flavour links between items: cosine between item vectors, at most
+//! `max_links` per item above `floor`, other territories first. Each link
+//! says why, in the term labels the producer supplied. A pair the owner hid is
 //! dropped before the quota cut, so its slot goes to the next candidate.
 
 use serde::Serialize;
 
-use crate::epicure::Epicure;
+use crate::embeddings::Embeddings;
 use crate::export::{EngineExport, Status};
-use crate::vectors::{FlavourSpace, RecipeFlavour, cosine, term_vector};
+use crate::vectors::{FlavourSpace, ItemFlavour, cosine, term_vector};
 
 pub const DEFAULT_MAX_LINKS: usize = 3;
 /// The owner's floor on the rarity-weighted, centred scale, chosen on the
@@ -60,27 +60,27 @@ struct Participant<'a> {
     id: u64,
     territory: Option<u64>,
     vector: &'a [f64],
-    flavour: &'a RecipeFlavour,
+    flavour: &'a ItemFlavour,
 }
 
 pub fn find_links(
     export: &EngineExport,
     space: &FlavourSpace,
-    epicure: &Epicure,
+    embeddings: &Embeddings,
     options: &LinkOptions,
 ) -> Vec<Link> {
     let mut participants: Vec<Participant> = export
-        .recipes
+        .items
         .iter()
-        .filter(|recipe| recipe.status == Status::Assigned)
-        .filter_map(|recipe| {
-            let flavour = space.recipes.get(&recipe.id)?;
+        .filter(|item| item.status == Status::Assigned)
+        .filter_map(|item| {
+            let flavour = space.items.get(&item.id)?;
             let vector = flavour.vector.as_deref()?;
-            let territory = recipe
+            let territory = item
                 .subtheme_id
                 .and_then(|subtheme_id| export.top_level_of(subtheme_id));
             Some(Participant {
-                id: recipe.id,
+                id: item.id,
                 territory,
                 vector,
                 flavour,
@@ -116,8 +116,8 @@ pub fn find_links(
         });
         for (target, similarity, crosses_theme) in candidates.into_iter().take(options.max_links) {
             let shared = shared_terms(space, source.flavour, target.flavour);
-            let closest = if shared.is_empty() && !epicure.is_one_axis_per_term() {
-                closest_pair(source.flavour, target.flavour, epicure)
+            let closest = if shared.is_empty() && !embeddings.is_one_axis_per_term() {
+                closest_pair(source.flavour, target.flavour, embeddings)
             } else {
                 None
             };
@@ -134,12 +134,12 @@ pub fn find_links(
     links
 }
 
-/// The terms both recipes use, rarest first (highest weight, then name), so
+/// The terms both items use, rarest first (highest weight, then name), so
 /// the reason a link exists reads before the staples.
 fn shared_terms(
     space: &FlavourSpace,
-    source: &RecipeFlavour,
-    target: &RecipeFlavour,
+    source: &ItemFlavour,
+    target: &ItemFlavour,
 ) -> Vec<SharedTerm> {
     let mut shared: Vec<SharedTerm> = source
         .names_by_term
@@ -163,17 +163,17 @@ fn shared_terms(
 }
 
 fn closest_pair(
-    source: &RecipeFlavour,
-    target: &RecipeFlavour,
-    epicure: &Epicure,
+    source: &ItemFlavour,
+    target: &ItemFlavour,
+    embeddings: &Embeddings,
 ) -> Option<ClosestPair> {
     let mut best: Option<(f64, &String, &String)> = None;
     for source_term in source.names_by_term.keys() {
-        let Some(source_vector) = term_vector(epicure, source_term) else {
+        let Some(source_vector) = term_vector(embeddings, source_term) else {
             continue;
         };
         for target_term in target.names_by_term.keys() {
-            let Some(target_vector) = term_vector(epicure, target_term) else {
+            let Some(target_vector) = term_vector(embeddings, target_term) else {
                 continue;
             };
             let similarity = cosine(&source_vector, &target_vector);
@@ -195,12 +195,12 @@ fn closest_pair(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::epicure::Epicure;
+    use crate::embeddings::Embeddings;
     use crate::export::parse;
     use crate::vectors::FlavourSpace;
 
-    fn epicure() -> Epicure {
-        Epicure::from_rows(
+    fn embeddings() -> Embeddings {
+        Embeddings::from_rows(
             vec![
                 "beef".into(),
                 "garlic".into(),
@@ -213,53 +213,49 @@ mod tests {
     }
 
     const THEMES: &str = r#"[
-        {"id":1,"parent_id":null,"name":"A","epicure_terms":[]},
-        {"id":2,"parent_id":null,"name":"B","epicure_terms":[]},
-        {"id":11,"parent_id":1,"name":"A1","epicure_terms":[]},
-        {"id":21,"parent_id":2,"name":"B1","epicure_terms":[]}
+        {"id":1,"parent_id":null,"name":"A","terms":[]},
+        {"id":2,"parent_id":null,"name":"B","terms":[]},
+        {"id":11,"parent_id":1,"name":"A1","terms":[]},
+        {"id":21,"parent_id":2,"name":"B1","terms":[]}
     ]"#;
 
-    fn recipe(id: u64, subtheme: Option<u64>, ingredients: &[(&str, &str)]) -> String {
+    fn item(id: u64, subtheme: Option<u64>, item_terms: &[(&str, &str)]) -> String {
         let (subtheme, status) = subtheme.map_or(("null".to_string(), "needs_owner"), |id| {
             (id.to_string(), "assigned")
         });
-        let ingredients: Vec<String> = ingredients
+        let item_terms: Vec<String> = item_terms
             .iter()
-            .map(|(name, term)| format!(r#"{{"name":"{name}","epicure_term":"{term}"}}"#))
+            .map(|(name, term)| format!(r#"{{"label":"{name}","term":"{term}"}}"#))
             .collect();
         format!(
-            r#"{{"id":{id},"title":"Synthetic","subtheme_id":{subtheme},"status":"{status}","seal":"complete","ingredients":[{}]}}"#,
-            ingredients.join(",")
+            r#"{{"id":{id},"title":"Synthetic","subtheme_id":{subtheme},"status":"{status}","badges":[],"terms":[{}]}}"#,
+            item_terms.join(",")
         )
     }
 
-    /// Six unassigned lime recipes: they move the corpus mean towards lime
+    /// Six unassigned lime items: they move the corpus mean towards lime
     /// but never link, so a selection test on a handful of single-term
-    /// recipes keeps them apart the way their terms are, instead of
-    /// centring three recipes into opposite directions.
-    fn with_ballast(recipes: &[String]) -> Vec<String> {
-        let mut weighted = recipes.to_vec();
-        weighted.extend((100..106).map(|id| recipe(id, None, &[("Limão", "lime")])));
+    /// items keeps them apart the way their terms are, instead of
+    /// centring three items into opposite directions.
+    fn with_ballast(items: &[String]) -> Vec<String> {
+        let mut weighted = items.to_vec();
+        weighted.extend((100..106).map(|id| item(id, None, &[("Limão", "lime")])));
         weighted
     }
 
-    fn links_of(recipes: &[String], options: &LinkOptions) -> Vec<Link> {
-        links_rejecting(recipes, "[]", options)
+    fn links_of(items: &[String], options: &LinkOptions) -> Vec<Link> {
+        links_rejecting(items, "[]", options)
     }
 
-    fn links_rejecting(
-        recipes: &[String],
-        rejected_pairs: &str,
-        options: &LinkOptions,
-    ) -> Vec<Link> {
+    fn links_rejecting(items: &[String], rejected_pairs: &str, options: &LinkOptions) -> Vec<Link> {
         let text = format!(
-            r#"{{"schema":"recipes-cartographer/engine-export","version":2,"taxonomy_version":1,"themes":{THEMES},"recipes":[{}],"previous":null,"rejected_pairs":{rejected_pairs}}}"#,
-            recipes.join(",")
+            r#"{{"schema":"corpus-cartographer/engine-export","version":3,"taxonomy_version":1,"themes":{THEMES},"items":[{}],"previous":null,"rejected_pairs":{rejected_pairs}}}"#,
+            items.join(",")
         );
-        let export = parse(&text).unwrap();
-        let epicure = epicure();
-        let space = FlavourSpace::build(&export.recipes, &epicure);
-        find_links(&export, &space, &epicure, options)
+        let (export, _format) = parse(&text).unwrap();
+        let embeddings = embeddings();
+        let space = FlavourSpace::build(&export.items, &embeddings);
+        find_links(&export, &space, &embeddings, options)
     }
 
     fn targets_of(links: &[Link], source: u64) -> Vec<u64> {
@@ -276,14 +272,14 @@ mod tests {
     }
 
     #[test]
-    fn cross_theme_comes_before_a_closer_same_theme_recipe() {
-        let recipes = with_ballast(&[
-            recipe(1, Some(11), &[("Picanha", "beef")]),
-            recipe(2, Some(11), &[("Fraldinha", "beef")]),
-            recipe(3, Some(21), &[("Alho", "garlic")]),
+    fn cross_theme_comes_before_a_closer_same_theme_item() {
+        let items = with_ballast(&[
+            item(1, Some(11), &[("Picanha", "beef")]),
+            item(2, Some(11), &[("Fraldinha", "beef")]),
+            item(3, Some(21), &[("Alho", "garlic")]),
         ]);
         let links = links_of(
-            &recipes,
+            &items,
             &LinkOptions {
                 max_links: 1,
                 floor: 0.5,
@@ -295,14 +291,14 @@ mod tests {
 
     #[test]
     fn the_quota_fills_with_same_theme_and_the_floor_cuts() {
-        let recipes = with_ballast(&[
-            recipe(1, Some(11), &[("Picanha", "beef")]),
-            recipe(2, Some(11), &[("Fraldinha", "beef")]),
-            recipe(3, Some(21), &[("Alho", "garlic")]),
-            recipe(4, Some(21), &[("Limão", "lime")]),
+        let items = with_ballast(&[
+            item(1, Some(11), &[("Picanha", "beef")]),
+            item(2, Some(11), &[("Fraldinha", "beef")]),
+            item(3, Some(21), &[("Alho", "garlic")]),
+            item(4, Some(21), &[("Limão", "lime")]),
         ]);
         let links = links_of(
-            &recipes,
+            &items,
             &LinkOptions {
                 max_links: 3,
                 floor: 0.5,
@@ -313,15 +309,15 @@ mod tests {
 
     #[test]
     fn ties_go_to_the_lower_target_id() {
-        let recipes = [
-            recipe(1, Some(11), &[("Picanha", "beef")]),
-            recipe(5, Some(21), &[("Acém", "beef")]),
-            recipe(4, Some(21), &[("Cupim", "beef")]),
+        let items = [
+            item(1, Some(11), &[("Picanha", "beef")]),
+            item(5, Some(21), &[("Acém", "beef")]),
+            item(4, Some(21), &[("Cupim", "beef")]),
         ];
         assert_eq!(
             targets_of(
                 &links_of(
-                    &recipes,
+                    &items,
                     &LinkOptions {
                         max_links: 1,
                         floor: 0.5
@@ -334,15 +330,15 @@ mod tests {
     }
 
     #[test]
-    fn vectorless_and_unassigned_recipes_get_no_links() {
-        let recipes = [
-            recipe(1, Some(11), &[("Picanha", "beef")]),
-            recipe(2, None, &[("Picanha", "beef")]),
-            recipe(3, Some(21), &[]),
-            recipe(4, Some(21), &[("Sal", "salt")]),
+    fn vectorless_and_unassigned_items_get_no_links() {
+        let items = [
+            item(1, Some(11), &[("Picanha", "beef")]),
+            item(2, None, &[("Picanha", "beef")]),
+            item(3, Some(21), &[]),
+            item(4, Some(21), &[("Sal", "salt")]),
         ];
         let links = links_of(
-            &recipes,
+            &items,
             &LinkOptions {
                 max_links: 3,
                 floor: -1.0,
@@ -353,15 +349,15 @@ mod tests {
 
     #[test]
     fn shared_terms_carry_each_side_s_original_names() {
-        let recipes = [
-            recipe(1, Some(11), &[("Alho", "garlic"), ("Picanha", "beef")]),
-            recipe(
+        let items = [
+            item(1, Some(11), &[("Alho", "garlic"), ("Picanha", "beef")]),
+            item(
                 2,
                 Some(21),
                 &[("Alho picado", "garlic"), ("Dente de alho", "garlic")],
             ),
         ];
-        let link = links_of(&recipes, &LinkOptions::default())
+        let link = links_of(&items, &LinkOptions::default())
             .into_iter()
             .find(|link| link.source == 1)
             .unwrap();
@@ -377,14 +373,14 @@ mod tests {
 
     #[test]
     fn shared_terms_list_the_rarest_first() {
-        // Garlic is in every recipe, lime only in these two.
-        let recipes = [
-            recipe(1, Some(11), &[("Alho", "garlic"), ("Limão", "lime")]),
-            recipe(2, Some(21), &[("Alho", "garlic"), ("Limão taiti", "lime")]),
-            recipe(3, Some(21), &[("Alho", "garlic"), ("Picanha", "beef")]),
+        // Garlic is in every item, lime only in these two.
+        let items = [
+            item(1, Some(11), &[("Alho", "garlic"), ("Limão", "lime")]),
+            item(2, Some(21), &[("Alho", "garlic"), ("Limão taiti", "lime")]),
+            item(3, Some(21), &[("Alho", "garlic"), ("Picanha", "beef")]),
         ];
         let link = links_of(
-            &recipes,
+            &items,
             &LinkOptions {
                 max_links: 3,
                 floor: -1.0,
@@ -403,11 +399,11 @@ mod tests {
 
     #[test]
     fn without_shared_terms_the_closest_pair_explains_the_link() {
-        let recipes = [
-            recipe(1, Some(11), &[("Alho", "garlic")]),
-            recipe(2, Some(21), &[("Cebola", "onion")]),
+        let items = [
+            item(1, Some(11), &[("Alho", "garlic")]),
+            item(2, Some(21), &[("Cebola", "onion")]),
         ];
-        let link = links_of(&recipes, &LinkOptions::default())
+        let link = links_of(&items, &LinkOptions::default())
             .into_iter()
             .find(|link| link.source == 1)
             .unwrap();
@@ -421,18 +417,18 @@ mod tests {
 
     #[test]
     fn a_hidden_pair_gives_its_slot_to_the_next_candidate_other_territories_first() {
-        let recipes = with_ballast(&[
-            recipe(1, Some(11), &[("Picanha", "beef")]),
-            recipe(2, Some(11), &[("Fraldinha", "beef")]),
-            recipe(3, Some(21), &[("Alho", "garlic")]),
-            recipe(4, Some(21), &[("Cebola", "onion")]),
+        let items = with_ballast(&[
+            item(1, Some(11), &[("Picanha", "beef")]),
+            item(2, Some(11), &[("Fraldinha", "beef")]),
+            item(3, Some(21), &[("Alho", "garlic")]),
+            item(4, Some(21), &[("Cebola", "onion")]),
         ]);
         let options = LinkOptions {
             max_links: 2,
             floor: 0.6,
         };
-        assert_eq!(targets_of(&links_of(&recipes, &options), 1), [3, 4]);
-        let links = links_rejecting(&recipes, "[[1,3]]", &options);
+        assert_eq!(targets_of(&links_of(&items, &options), 1), [3, 4]);
+        let links = links_rejecting(&items, "[[1,3]]", &options);
         assert_eq!(targets_of(&links, 1), [4, 2]);
         assert_eq!(
             targets_of(&links, 3),
@@ -442,14 +438,14 @@ mod tests {
     }
 
     #[test]
-    fn with_no_other_candidate_above_the_floor_a_recipe_keeps_fewer_links() {
-        let recipes = [
-            recipe(1, Some(11), &[("Picanha", "beef")]),
-            recipe(2, Some(11), &[("Fraldinha", "beef")]),
-            recipe(5, Some(21), &[("Limão", "lime")]),
+    fn with_no_other_candidate_above_the_floor_a_item_keeps_fewer_links() {
+        let items = [
+            item(1, Some(11), &[("Picanha", "beef")]),
+            item(2, Some(11), &[("Fraldinha", "beef")]),
+            item(5, Some(21), &[("Limão", "lime")]),
         ];
         let links = links_rejecting(
-            &recipes,
+            &items,
             "[[1,2]]",
             &LinkOptions {
                 max_links: 3,

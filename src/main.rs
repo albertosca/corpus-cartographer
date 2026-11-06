@@ -1,4 +1,4 @@
-//! recipes-engine: reads the Rails export and, when given, Epicure, writes links.json and
+//! items-engine: reads the Rails export and, when given, Embeddings, writes links.json and
 //! the two map specs into --out-dir. Each file is written to a temporary
 //! name and renamed, so a reader never sees half a document.
 
@@ -8,7 +8,7 @@ use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
 use clap::Parser;
-use corpus_cartographer::epicure::Epicure;
+use corpus_cartographer::embeddings::Embeddings;
 use corpus_cartographer::links::{DEFAULT_FLOOR, DEFAULT_MAX_LINKS, LinkOptions};
 
 #[derive(Parser)]
@@ -23,8 +23,8 @@ struct Options {
     input: PathBuf,
     /// The directory holding vocab.json and embeddings.safetensors. Without
     /// it every term the export names is its own axis.
-    #[arg(long, visible_alias = "embeddings-dir")]
-    epicure_dir: Option<PathBuf>,
+    #[arg(long, alias = "epicure-dir")]
+    embeddings_dir: Option<PathBuf>,
     /// Where links.json, map-spec.v1.json and map-spec.nested.json go.
     #[arg(long)]
     out_dir: PathBuf,
@@ -58,9 +58,9 @@ fn execute(options: &Options) -> Result<String, Box<dyn Error>> {
         max_links: options.max_links,
         floor: options.floor,
     };
-    let output = match &options.epicure_dir {
+    let output = match &options.embeddings_dir {
         Some(directory) => {
-            corpus_cartographer::run(&input_text, &Epicure::load(directory)?, &link_options)?
+            corpus_cartographer::run(&input_text, &Embeddings::load(directory)?, &link_options)?
         }
         None => corpus_cartographer::run_without_embeddings(&input_text, &link_options)?,
     };

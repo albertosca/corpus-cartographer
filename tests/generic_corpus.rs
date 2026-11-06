@@ -5,7 +5,7 @@ mod support;
 
 use std::fmt::Write;
 
-use corpus_cartographer::epicure::Epicure;
+use corpus_cartographer::embeddings::Embeddings;
 use corpus_cartographer::export;
 
 const THEMES: &str = r#"[
@@ -204,13 +204,18 @@ fn identity_axes_agree_with_an_explicit_identity_matrix_on_the_golden_export() {
             .join("contracts/engine-export.v2.json"),
     )
     .unwrap();
-    let terms: Vec<String> = export::parse(&text).unwrap().terms().into_iter().collect();
+    let terms: Vec<String> = export::parse(&text)
+        .unwrap()
+        .0
+        .terms()
+        .into_iter()
+        .collect();
     let dimension = terms.len();
     let mut values = vec![0.0_f32; dimension * dimension];
     for index in 0..dimension {
         values[index * dimension + index] = 1.0;
     }
-    let explicit = Epicure::from_rows(terms, values, dimension);
+    let explicit = Embeddings::from_rows(terms, values, dimension);
     let dense = corpus_cartographer::run(&text, &explicit, &support::golden_options()).unwrap();
     let generic =
         corpus_cartographer::run_without_embeddings(&text, &support::golden_options()).unwrap();

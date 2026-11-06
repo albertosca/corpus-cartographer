@@ -44,8 +44,9 @@ fn the_export_schema_rejects_an_unknown_field() {
 #[test]
 fn the_golden_export_parses_into_the_engine_types() {
     let text = fs::read_to_string(contracts_directory().join("engine-export.v2.json")).unwrap();
-    let export = corpus_cartographer::export::parse(&text).unwrap();
-    assert_eq!((export.themes.len(), export.recipes.len()), (6, 7));
+    let (export, format) = corpus_cartographer::export::parse(&text).unwrap();
+    assert_eq!(format, corpus_cartographer::export::Format::V2);
+    assert_eq!((export.themes.len(), export.items.len()), (6, 7));
     assert_eq!(export.top_level_of(22), Some(2));
     assert_eq!(export.rejected_pairs, vec![[101, 102]]);
 }
@@ -54,7 +55,12 @@ mod support;
 
 fn golden_output() -> corpus_cartographer::EngineOutput {
     let input = fs::read_to_string(contracts_directory().join("engine-export.v2.json")).unwrap();
-    corpus_cartographer::run(&input, &support::mini_epicure(), &support::golden_options()).unwrap()
+    corpus_cartographer::run(
+        &input,
+        &support::mini_embeddings(),
+        &support::golden_options(),
+    )
+    .unwrap()
 }
 
 #[test]

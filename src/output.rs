@@ -5,7 +5,7 @@ use std::collections::BTreeMap;
 
 use serde::Serialize;
 
-use crate::export::{EngineExport, Positions, Seal, Status};
+use crate::export::{EngineExport, Positions, Status};
 use crate::geometry::round_to;
 use crate::layout::Layout;
 use crate::links::{ClosestPair, Link, LinkOptions};
@@ -16,11 +16,11 @@ pub const LINKS_SCHEMA: &str = "recipes-cartographer/engine-links";
 pub const LINKS_VERSION: u32 = 2;
 pub const ENGINE_VERSION: &str = env!("CARGO_PKG_VERSION");
 const SIMILARITY_DECIMALS: i32 = 4;
-const NO_RECIPE_BADGE: &str = "sem receita";
 
 #[derive(Debug, Clone, Copy, Serialize)]
 pub struct Counts {
-    pub recipes: usize,
+    #[serde(rename = "recipes")]
+    pub items: usize,
     pub placed: usize,
     pub waiting: usize,
     pub with_vector: usize,
@@ -30,16 +30,16 @@ pub struct Counts {
 impl Counts {
     pub fn of(export: &EngineExport, space: &FlavourSpace, links: &[Link]) -> Self {
         let placed = export
-            .recipes
+            .items
             .iter()
-            .filter(|recipe| recipe.status == Status::Assigned)
+            .filter(|item| item.status == Status::Assigned)
             .count();
         Self {
-            recipes: export.recipes.len(),
+            items: export.items.len(),
             placed,
-            waiting: export.recipes.len() - placed,
+            waiting: export.items.len() - placed,
             with_vector: space
-                .recipes
+                .items
                 .values()
                 .filter(|flavour| flavour.vector.is_some())
                 .count(),
@@ -158,16 +158,16 @@ fn theme_key(id: u64) -> String {
     format!("theme:{id}")
 }
 
-fn recipe_key(id: u64) -> String {
+fn item_key(id: u64) -> String {
     format!("recipe:{id}")
 }
 
-/// Assigned recipe ids per sub-theme, sorted.
+/// Assigned item ids per sub-theme, sorted.
 fn members_by_subtheme(export: &EngineExport) -> BTreeMap<u64, Vec<u64>> {
     let mut members: BTreeMap<u64, Vec<u64>> = BTreeMap::new();
-    for recipe in &export.recipes {
-        if let (Status::Assigned, Some(subtheme_id)) = (recipe.status, recipe.subtheme_id) {
-            members.entry(subtheme_id).or_default().push(recipe.id);
+    for item in &export.items {
+        if let (Status::Assigned, Some(subtheme_id)) = (item.status, item.subtheme_id) {
+            members.entry(subtheme_id).or_default().push(item.id);
         }
     }
     for ids in members.values_mut() {
@@ -177,15 +177,15 @@ fn members_by_subtheme(export: &EngineExport) -> BTreeMap<u64, Vec<u64>> {
 }
 
 fn nodes(export: &EngineExport, layout: &Layout, innermost: bool) -> Vec<Node> {
-    let mut recipes: Vec<_> = export.recipes.iter().collect();
-    recipes.sort_by_key(|recipe| recipe.id);
-    recipes
+    let mut items: Vec<_> = export.items.iter().collect();
+    items.sort_by_key(|item| item.id);
+    items
         .into_iter()
-        .map(|recipe| {
-            let point = layout.recipes.get(&recipe.id).copied().unwrap_or_default();
-            let territory = recipe
+        .map(|item| {
+            let point = layout.items.get(&item.id).copied().unwrap_or_default();
+            let territory = item
                 .subtheme_id
-                .filter(|_| recipe.status == Status::Assigned)
+                .filter(|_| item.status == Status::Assigned)
                 .map(|subtheme_id| {
                     if innermost {
                         subtheme_id
@@ -194,18 +194,13 @@ fn nodes(export: &EngineExport, layout: &Layout, innermost: bool) -> Vec<Node> {
                     }
                 })
                 .map(theme_key);
-            let badges = if recipe.seal == Seal::None {
-                vec![NO_RECIPE_BADGE.to_string()]
-            } else {
-                Vec::new()
-            };
             Node {
-                id: recipe_key(recipe.id),
-                label: recipe.title.clone(),
+                id: item_key(item.id),
+                label: item.title.clone(),
                 x: point[0],
                 y: point[1],
                 territory,
-                badges,
+                badges: item.badges.clone(),
             }
         })
         .collect()
@@ -229,7 +224,7 @@ fn members_under(
         .flat_map(|subtheme| members.get(&subtheme.id).cloned().unwrap_or_default())
         .collect();
     ids.sort_unstable();
-    ids.into_iter().map(recipe_key).collect()
+    ids.into_iter().map(item_key).collect()
 }
 
 pub fn map_spec_v1(export: &EngineExport, layout: &Layout) -> String {
@@ -293,8 +288,8 @@ fn reason_text(link: &Link, edge_source: u64) -> String {
 fn edge(lower: u64, higher: u64, link: &Link) -> Edge {
     let reason = reason_text(link, lower);
     Edge {
-        source: recipe_key(lower),
-        target: recipe_key(higher),
+        source: item_key(lower),
+        target: item_key(higher),
         weight: round_to(link.similarity, SIMILARITY_DECIMALS).max(0.0),
         reason: (!reason.is_empty()).then_some(reason),
     }
@@ -318,7 +313,7 @@ pub fn map_spec_nested(export: &EngineExport, layout: &Layout, links: &[Link]) -
                     .cloned()
                     .unwrap_or_default()
                     .into_iter()
-                    .map(recipe_key)
+                    .map(item_key)
                     .collect(),
             },
             centroid: if theme.parent_id.is_none() {
@@ -376,7 +371,7 @@ mod tests {
     }
 
     #[test]
-    fn a_shared_reason_names_the_edge_source_ingredient() {
+    fn a_shared_reason_names_the_edge_source_term() {
         let shared = vec![SharedTerm {
             term: "garlic".into(),
             source_names: vec!["alho de 7".into()],

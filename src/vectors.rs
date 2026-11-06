@@ -1,67 +1,67 @@
-//! A recipe's flavour is the weighted mean of its distinct Epicure terms'
+//! A item's flavour is the weighted mean of its distinct Embeddings terms'
 //! unit vectors, re-normalized, minus the corpus mean: a term weighs more
-//! the fewer recipes use it, and what every recipe shares counts for nothing.
-//! A group's flavour is the mean direction of its recipes' flavours. Terms
+//! the fewer items use it, and what every item shares counts for nothing.
+//! A group's flavour is the mean direction of its items' flavours. Terms
 //! outside the vocabulary are ignored and counted.
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use crate::epicure::Epicure;
-use crate::export::Recipe;
+use crate::embeddings::Embeddings;
+use crate::export::Item;
 
 const MINIMUM_NORM: f64 = 1e-12;
-/// A recipe closer than this to the corpus mean keeps its raw flavour. The
+/// A item closer than this to the corpus mean keeps its raw flavour. The
 /// mean of N identical unit vectors drifts about N * 1e-17 off them, so the
 /// absolute `MINIMUM_NORM` would turn that rounding into a flavour from about
-/// 100k recipes on; real flavours differ from the mean by tenths.
+/// 100k items on; real flavours differ from the mean by tenths.
 const SAME_AS_MEAN: f64 = 1e-9;
-/// Fewer recipes than this are not centred: one would centre to nothing,
+/// Fewer items than this are not centred: one would centre to nothing,
 /// two to opposite directions.
-const MINIMUM_CENTRED_RECIPES: usize = 3;
+const MINIMUM_CENTRED_ITEMS: usize = 3;
 
 #[derive(Debug, Clone, Default)]
-pub struct RecipeFlavour {
+pub struct ItemFlavour {
     pub vector: Option<Vec<f64>>,
-    /// Each vocabulary term the recipe uses, with the original ingredient
+    /// Each vocabulary term the item uses, with the original term label
     /// names that mapped to it (sorted, so input order never shows).
     pub names_by_term: BTreeMap<String, BTreeSet<String>>,
 }
 
 #[derive(Debug, Clone, Default)]
 pub struct FlavourSpace {
-    pub recipes: BTreeMap<u64, RecipeFlavour>,
+    pub items: BTreeMap<u64, ItemFlavour>,
     /// Distinct terms the export used that the vocabulary does not have.
     pub unknown_terms: usize,
-    /// Smoothed inverse document frequency of each term the recipes use:
+    /// Smoothed inverse document frequency of each term the items use:
     /// ln((1 + N) / (1 + df)) + 1, never below 1.
     pub weights: BTreeMap<String, f64>,
-    /// The mean of the raw recipe flavours, subtracted from every flavour;
-    /// None below `MINIMUM_CENTRED_RECIPES` recipes with flavour.
+    /// The mean of the raw item flavours, subtracted from every flavour;
+    /// None below `MINIMUM_CENTRED_ITEMS` items with flavour.
     pub mean: Option<Vec<f64>>,
 }
 
 impl FlavourSpace {
-    pub fn build(recipes: &[Recipe], epicure: &Epicure) -> Self {
+    pub fn build(items: &[Item], embeddings: &Embeddings) -> Self {
         let mut unknown = BTreeSet::new();
         let mut flavours = BTreeMap::new();
-        for recipe in recipes {
+        for item in items {
             let mut names_by_term: BTreeMap<String, BTreeSet<String>> = BTreeMap::new();
-            for ingredient in &recipe.ingredients {
-                let Some(term) = &ingredient.epicure_term else {
+            for item_term in &item.terms {
+                let Some(term) = &item_term.term else {
                     continue;
                 };
-                if epicure.vector(term).is_none() {
+                if embeddings.vector(term).is_none() {
                     unknown.insert(term.clone());
                     continue;
                 }
                 names_by_term
                     .entry(term.clone())
                     .or_default()
-                    .insert(ingredient.name.clone());
+                    .insert(item_term.label.clone());
             }
             flavours.insert(
-                recipe.id,
-                RecipeFlavour {
+                item.id,
+                ItemFlavour {
                     vector: None,
                     names_by_term,
                 },
@@ -72,7 +72,7 @@ impl FlavourSpace {
             let weighted: Vec<(Vec<f64>, f64)> = flavour
                 .names_by_term
                 .keys()
-                .filter_map(|term| Some((term_vector(epicure, term)?, weights[term])))
+                .filter_map(|term| Some((term_vector(embeddings, term)?, weights[term])))
                 .collect();
             flavour.vector = weighted_direction(
                 weighted
@@ -81,14 +81,14 @@ impl FlavourSpace {
             );
         }
         let mut space = Self {
-            recipes: flavours,
+            items: flavours,
             unknown_terms: unknown.len(),
             weights,
             mean: None,
         };
         space.mean = space.raw_mean();
         if let Some(mean) = space.mean.as_deref() {
-            for flavour in space.recipes.values_mut() {
+            for flavour in space.items.values_mut() {
                 if let Some(raw) = flavour.vector.take() {
                     flavour.vector = Some(centred(raw, mean));
                 }
@@ -97,7 +97,7 @@ impl FlavourSpace {
         space
     }
 
-    /// The term's weight; 1 for a term no recipe uses (a theme's own terms).
+    /// The term's weight; 1 for a term no item uses (a theme's own terms).
     pub fn weight(&self, term: &str) -> f64 {
         self.weights.get(term).copied().unwrap_or(1.0)
     }
@@ -111,18 +111,18 @@ impl FlavourSpace {
         }
     }
 
-    pub fn vector(&self, recipe_id: u64) -> Option<&[f64]> {
-        self.recipes.get(&recipe_id)?.vector.as_deref()
+    pub fn vector(&self, item_id: u64) -> Option<&[f64]> {
+        self.items.get(&item_id)?.vector.as_deref()
     }
 
-    /// The mean of the raw flavours, summed in recipe id order.
+    /// The mean of the raw flavours, summed in item id order.
     fn raw_mean(&self) -> Option<Vec<f64>> {
         let vectors: Vec<&[f64]> = self
-            .recipes
+            .items
             .values()
             .filter_map(|flavour| flavour.vector.as_deref())
             .collect();
-        if vectors.len() < MINIMUM_CENTRED_RECIPES {
+        if vectors.len() < MINIMUM_CENTRED_ITEMS {
             return None;
         }
         let mut sum = vec![0.0; vectors[0].len()];
@@ -136,9 +136,9 @@ impl FlavourSpace {
     }
 }
 
-/// N counts the recipes with at least one vocabulary term; df the recipes
+/// N counts the items with at least one vocabulary term; df the items
 /// that use the term.
-fn smoothed_idf(flavours: &BTreeMap<u64, RecipeFlavour>) -> BTreeMap<String, f64> {
+fn smoothed_idf(flavours: &BTreeMap<u64, ItemFlavour>) -> BTreeMap<String, f64> {
     let mut document_frequency: BTreeMap<String, usize> = BTreeMap::new();
     let mut documents = 0usize;
     for flavour in flavours.values() {
@@ -176,8 +176,8 @@ fn centred(raw: Vec<f64>, mean: &[f64]) -> Vec<f64> {
     difference.into_iter().map(|value| value / norm).collect()
 }
 
-pub fn term_vector(epicure: &Epicure, term: &str) -> Option<Vec<f64>> {
-    epicure
+pub fn term_vector(embeddings: &Embeddings, term: &str) -> Option<Vec<f64>> {
+    embeddings
         .vector(term)
         .map(|row| row.iter().map(|&value| f64::from(value)).collect())
 }
@@ -218,29 +218,29 @@ pub fn cosine(left: &[f64], right: &[f64]) -> f64 {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::epicure::Epicure;
-    use crate::export::{Ingredient, Recipe, Seal, Status};
+    use crate::embeddings::Embeddings;
+    use crate::export::{Item, ItemTerm, Status};
 
-    fn space() -> Epicure {
-        Epicure::from_rows(
+    fn space() -> Embeddings {
+        Embeddings::from_rows(
             vec!["garlic".into(), "lime".into()],
             vec![1.0, 0.0, 0.0, 1.0],
             2,
         )
     }
 
-    fn recipe(ingredients: &[(&str, Option<&str>)]) -> Recipe {
-        Recipe {
+    fn item(item_terms: &[(&str, Option<&str>)]) -> Item {
+        Item {
             id: 1,
             title: "Synthetic".into(),
             subtheme_id: None,
             status: Status::Unclassified,
-            seal: Seal::Complete,
-            ingredients: ingredients
+            badges: Vec::new(),
+            terms: item_terms
                 .iter()
-                .map(|(name, term)| Ingredient {
-                    name: (*name).into(),
-                    epicure_term: term.map(Into::into),
+                .map(|(name, term)| ItemTerm {
+                    label: (*name).into(),
+                    term: term.map(Into::into),
                 })
                 .collect(),
         }
@@ -248,22 +248,22 @@ mod tests {
 
     #[test]
     fn a_term_used_twice_counts_once() {
-        let epicure = space();
+        let embeddings = space();
         let twice = FlavourSpace::build(
-            &[recipe(&[
+            &[item(&[
                 ("Alho", Some("garlic")),
                 ("Alho picado", Some("garlic")),
                 ("Limão", Some("lime")),
             ])],
-            &epicure,
+            &embeddings,
         );
         let once = FlavourSpace::build(
-            &[recipe(&[("Alho", Some("garlic")), ("Limão", Some("lime"))])],
-            &epicure,
+            &[item(&[("Alho", Some("garlic")), ("Limão", Some("lime"))])],
+            &embeddings,
         );
 
         assert_eq!(twice.vector(1), once.vector(1));
-        let names: Vec<&str> = twice.recipes[&1].names_by_term["garlic"]
+        let names: Vec<&str> = twice.items[&1].names_by_term["garlic"]
             .iter()
             .map(String::as_str)
             .collect();
@@ -273,7 +273,7 @@ mod tests {
     #[test]
     fn the_vector_is_the_normalized_mean_of_the_terms() {
         let flavour = FlavourSpace::build(
-            &[recipe(&[("Alho", Some("garlic")), ("Limão", Some("lime"))])],
+            &[item(&[("Alho", Some("garlic")), ("Limão", Some("lime"))])],
             &space(),
         );
         let vector = flavour.vector(1).unwrap();
@@ -286,40 +286,40 @@ mod tests {
 
     #[test]
     fn an_unknown_term_is_ignored_and_counted_once() {
-        let mut second = recipe(&[("Sal", Some("salt"))]);
+        let mut second = item(&[("Sal", Some("salt"))]);
         second.id = 2;
-        let recipes = [
-            recipe(&[("Sal", Some("salt")), ("Alho", Some("garlic"))]),
+        let items = [
+            item(&[("Sal", Some("salt")), ("Alho", Some("garlic"))]),
             second,
         ];
-        let flavour = FlavourSpace::build(&recipes, &space());
+        let flavour = FlavourSpace::build(&items, &space());
         assert_eq!(flavour.unknown_terms, 1);
         assert!(flavour.vector(1).is_some());
     }
 
     #[test]
-    fn a_recipe_without_terms_has_no_vector() {
-        let flavour = FlavourSpace::build(&[recipe(&[("Sal", None)])], &space());
+    fn a_item_without_terms_has_no_vector() {
+        let flavour = FlavourSpace::build(&[item(&[("Sal", None)])], &space());
         assert!(flavour.vector(1).is_none());
         assert_eq!(flavour.unknown_terms, 0);
     }
 
     /// One orthogonal axis per term, so every term vector is a unit basis vector.
-    fn axes(terms: &[&str]) -> Epicure {
+    fn axes(terms: &[&str]) -> Embeddings {
         let dimension = terms.len();
         let mut values = vec![0.0; dimension * dimension];
         for index in 0..dimension {
             values[index * dimension + index] = 1.0;
         }
-        Epicure::from_rows(
+        Embeddings::from_rows(
             terms.iter().map(|term| (*term).to_string()).collect(),
             values,
             dimension,
         )
     }
 
-    fn numbered(id: u64, terms: &[&str]) -> Recipe {
-        let mut numbered = recipe(
+    fn numbered(id: u64, terms: &[&str]) -> Item {
+        let mut numbered = item(
             &terms
                 .iter()
                 .map(|term| (*term, Some(*term)))
@@ -339,8 +339,8 @@ mod tests {
         "garlic", "salt", "onion", "chili", "mint", "lime", "cilantro", "basil", "pepper", "thyme",
     ];
 
-    /// Recipes 1 and 2 share only pantry staples; 3 and 4 share only lime.
-    fn pantry_corpus() -> Vec<Recipe> {
+    /// Items 1 and 2 share only pantry staples; 3 and 4 share only lime.
+    fn pantry_corpus() -> Vec<Item> {
         vec![
             numbered(1, &["garlic", "salt", "onion", "chili"]),
             numbered(2, &["garlic", "salt", "onion", "mint"]),
@@ -362,19 +362,19 @@ mod tests {
 
     #[test]
     fn sharing_a_rare_term_beats_sharing_only_staples() {
-        let recipes = pantry_corpus();
-        let epicure = axes(&PANTRY);
-        let flavour = FlavourSpace::build(&recipes, &epicure);
+        let items = pantry_corpus();
+        let embeddings = axes(&PANTRY);
+        let flavour = FlavourSpace::build(&items, &embeddings);
         let staples = cosine(flavour.vector(1).unwrap(), flavour.vector(2).unwrap());
         let rare = cosine(flavour.vector(3).unwrap(), flavour.vector(4).unwrap());
         assert!(rare > staples, "rare {rare} staples {staples}");
 
         // The plain mean of the terms ranks them the other way round.
         let plain = |id: u64| {
-            let vectors: Vec<Vec<f64>> = recipes[id as usize - 1]
-                .ingredients
+            let vectors: Vec<Vec<f64>> = items[id as usize - 1]
+                .terms
                 .iter()
-                .filter_map(|ingredient| term_vector(&epicure, ingredient.epicure_term.as_ref()?))
+                .filter_map(|item_term| term_vector(&embeddings, item_term.term.as_ref()?))
                 .collect();
             mean_direction(vectors.iter().map(Vec::as_slice)).unwrap()
         };
@@ -382,9 +382,9 @@ mod tests {
     }
 
     #[test]
-    fn three_or_more_recipes_are_centred_on_their_mean() {
+    fn three_or_more_items_are_centred_on_their_mean() {
         let flavour = FlavourSpace::build(&pantry_corpus(), &axes(&PANTRY));
-        let mean = flavour.mean.as_ref().expect("six recipes are centred");
+        let mean = flavour.mean.as_ref().expect("six items are centred");
         let mut centred_sum = vec![0.0; PANTRY.len()];
         for id in 1..=6 {
             for (total, value) in centred_sum.iter_mut().zip(flavour.vector(id).unwrap()) {
@@ -401,10 +401,10 @@ mod tests {
     }
 
     #[test]
-    fn one_or_two_recipes_are_weighted_but_not_centred() {
-        let epicure = space();
-        let recipes = [numbered(1, &["garlic", "lime"]), numbered(2, &["garlic"])];
-        let flavour = FlavourSpace::build(&recipes, &epicure);
+    fn one_or_two_items_are_weighted_but_not_centred() {
+        let embeddings = space();
+        let items = [numbered(1, &["garlic", "lime"]), numbered(2, &["garlic"])];
+        let flavour = FlavourSpace::build(&items, &embeddings);
         assert!(flavour.mean.is_none());
 
         // N = 2: garlic is in both (weight 1), lime in one (weight ln(3/2) + 1).
@@ -422,14 +422,14 @@ mod tests {
     }
 
     #[test]
-    fn a_recipe_equal_to_the_mean_keeps_its_raw_flavour() {
-        let epicure = space();
-        let recipes = [
+    fn a_item_equal_to_the_mean_keeps_its_raw_flavour() {
+        let embeddings = space();
+        let items = [
             numbered(1, &["garlic", "lime"]),
             numbered(2, &["garlic", "lime"]),
             numbered(3, &["garlic", "lime"]),
         ];
-        let flavour = FlavourSpace::build(&recipes, &epicure);
+        let flavour = FlavourSpace::build(&items, &embeddings);
         let half_root = 0.5_f64.sqrt();
         for id in 1..=3 {
             assert!(
@@ -441,21 +441,21 @@ mod tests {
     }
 
     #[test]
-    fn centring_skips_recipes_without_flavour() {
-        // Two recipes with flavour and one without: still too few to centre.
-        let epicure = space();
-        let mut empty = recipe(&[("Sal", None)]);
+    fn centring_skips_items_without_flavour() {
+        // Two items with flavour and one without: still too few to centre.
+        let embeddings = space();
+        let mut empty = item(&[("Sal", None)]);
         empty.id = 3;
-        let recipes = [numbered(1, &["garlic"]), numbered(2, &["lime"]), empty];
-        let flavour = FlavourSpace::build(&recipes, &epicure);
+        let items = [numbered(1, &["garlic"]), numbered(2, &["lime"]), empty];
+        let flavour = FlavourSpace::build(&items, &embeddings);
         assert!(flavour.mean.is_none());
         assert!(close(flavour.vector(1).unwrap(), &[1.0, 0.0]));
     }
 
     #[test]
     fn centre_leaves_a_vector_alone_without_a_mean_or_when_it_is_the_mean() {
-        let epicure = space();
-        let few = FlavourSpace::build(&[numbered(1, &["garlic"])], &epicure);
+        let embeddings = space();
+        let few = FlavourSpace::build(&[numbered(1, &["garlic"])], &embeddings);
         assert_eq!(few.centre(vec![0.6, 0.8]), vec![0.6, 0.8]);
 
         let same = FlavourSpace::build(
@@ -464,23 +464,23 @@ mod tests {
                 numbered(2, &["garlic"]),
                 numbered(3, &["garlic"]),
             ],
-            &epicure,
+            &embeddings,
         );
         assert_eq!(same.centre(vec![1.0, 0.0]), vec![1.0, 0.0]);
     }
 
     #[test]
     fn centre_keeps_a_vector_that_differs_from_the_mean_only_by_rounding() {
-        // A large corpus of identical recipes sits a rounding error off its
+        // A large corpus of identical items sits a rounding error off its
         // own mean; that error must not become the flavour.
-        let epicure = space();
+        let embeddings = space();
         let same = FlavourSpace::build(
             &[
                 numbered(1, &["garlic"]),
                 numbered(2, &["garlic"]),
                 numbered(3, &["garlic"]),
             ],
-            &epicure,
+            &embeddings,
         );
         assert_eq!(same.centre(vec![1.0, 1e-10]), vec![1.0, 1e-10]);
     }

@@ -7,8 +7,8 @@ use corpus_cartographer::links::LinkOptions;
 use serde_json::{Value, json};
 
 /// A synthetic corpus: three themes of two sub-themes, four recipes each,
-/// two mini-Epicure terms per recipe chosen by position.
-fn corpus(extra_recipe: bool, previous: &Value) -> Value {
+/// two mini-Embeddings terms per recipe chosen by position.
+fn corpus(extra_item: bool, previous: &Value) -> Value {
     let terms = support::MINI_TERMS;
     let mut themes = Vec::new();
     let mut recipes = Vec::new();
@@ -26,7 +26,7 @@ fn corpus(extra_recipe: bool, previous: &Value) -> Value {
             }
         }
     }
-    if extra_recipe {
+    if extra_item {
         recipes.push(json!({"id": 9999, "title": "Synthetic new", "subtheme_id": 11, "status": "assigned", "seal": "complete",
             "ingredients": [{"name": "garlic", "epicure_term": "garlic"}]}));
     }
@@ -37,7 +37,7 @@ fn corpus(extra_recipe: bool, previous: &Value) -> Value {
 fn run(input: &Value) -> corpus_cartographer::EngineOutput {
     corpus_cartographer::run(
         &input.to_string(),
-        &support::mini_epicure(),
+        &support::mini_embeddings(),
         &LinkOptions::default(),
     )
     .unwrap()

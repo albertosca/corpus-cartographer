@@ -1,4 +1,4 @@
-//! Builds small Epicure spaces for tests, in memory or on disk, so no test
+//! Builds small Embeddings spaces for tests, in memory or on disk, so no test
 //! needs the real weights except the parity test.
 #![allow(dead_code)]
 
@@ -6,7 +6,7 @@ use std::collections::BTreeMap;
 use std::fs;
 use std::path::Path;
 
-use corpus_cartographer::epicure::Epicure;
+use corpus_cartographer::embeddings::Embeddings;
 use corpus_cartographer::links::{DEFAULT_MAX_LINKS, LinkOptions};
 use safetensors::Dtype;
 use safetensors::tensor::TensorView;
@@ -34,14 +34,14 @@ pub fn golden_options() -> LinkOptions {
     }
 }
 
-pub fn mini_epicure() -> Epicure {
+pub fn mini_embeddings() -> Embeddings {
     let terms = MINI_TERMS.iter().map(|term| (*term).to_string()).collect();
     let values = MINI_ROWS.iter().flatten().copied().collect();
-    Epicure::from_rows(terms, values, 4)
+    Embeddings::from_rows(terms, values, 4)
 }
 
-/// Writes vocab.json and embeddings.safetensors the way epicure-core ships them.
-pub fn write_epicure(directory: &Path, terms: &[&str], rows: &[&[f32]]) {
+/// Writes vocab.json and embeddings.safetensors the way embeddings-core ships them.
+pub fn write_embeddings(directory: &Path, terms: &[&str], rows: &[&[f32]]) {
     let vocabulary: BTreeMap<&str, usize> = terms
         .iter()
         .enumerate()
