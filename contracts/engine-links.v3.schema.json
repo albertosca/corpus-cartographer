@@ -1,0 +1,104 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "corpus-cartographer/engine-links/v3",
+  "title": "Map engine output read by the host app",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "version", "engine_version", "input_sha256", "links", "positions", "warnings", "counts", "options"],
+  "properties": {
+    "options": {
+      "description": "The link options this run used.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["max_links", "floor"],
+      "properties": {
+        "max_links": { "type": "integer", "minimum": 0 },
+        "floor": { "type": "number", "minimum": -1, "maximum": 1 }
+      }
+    },
+    "schema": { "const": "corpus-cartographer/engine-links" },
+    "version": { "const": 3 },
+    "engine_version": { "type": "string" },
+    "input_sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "links": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["source", "target", "similarity", "crosses_theme", "shared"],
+        "properties": {
+          "source": { "type": "integer", "minimum": 1 },
+          "target": { "type": "integer", "minimum": 1 },
+          "similarity": { "type": "number", "minimum": -1, "maximum": 1 },
+          "crosses_theme": { "type": "boolean" },
+          "shared": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["term", "source_labels", "target_labels"],
+              "properties": {
+                "term": { "type": "string" },
+                "source_labels": { "type": "array", "items": { "type": "string" }, "minItems": 1 },
+                "target_labels": { "type": "array", "items": { "type": "string" }, "minItems": 1 }
+              }
+            }
+          },
+          "closest": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["source_term", "source_label", "target_term", "target_label", "similarity"],
+            "properties": {
+              "source_term": { "type": "string" },
+              "source_label": { "type": "string" },
+              "target_term": { "type": "string" },
+              "target_label": { "type": "string" },
+              "similarity": { "type": "number" }
+            }
+          }
+        }
+      }
+    },
+    "positions": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["territories", "subthemes"],
+      "properties": {
+        "territories": { "$ref": "#/$defs/positions" },
+        "subthemes": { "$ref": "#/$defs/positions" }
+      }
+    },
+    "warnings": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["kind"],
+        "properties": {
+          "kind": { "enum": ["no_flavour", "no_alignment", "unknown_terms"] },
+          "theme_id": { "type": "integer", "minimum": 1 },
+          "count": { "type": "integer", "minimum": 1 }
+        }
+      }
+    },
+    "counts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["items", "placed", "waiting", "with_vector", "links"],
+      "properties": {
+        "items": { "type": "integer", "minimum": 0 },
+        "placed": { "type": "integer", "minimum": 0 },
+        "waiting": { "type": "integer", "minimum": 0 },
+        "with_vector": { "type": "integer", "minimum": 0 },
+        "links": { "type": "integer", "minimum": 0 }
+      }
+    }
+  },
+  "$defs": {
+    "positions": {
+      "type": "object",
+      "propertyNames": { "pattern": "^[1-9][0-9]*$" },
+      "additionalProperties": { "type": "array", "items": { "type": "number" }, "minItems": 2, "maxItems": 2 }
+    }
+  }
+}

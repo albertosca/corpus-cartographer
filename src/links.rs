@@ -32,16 +32,16 @@ impl Default for LinkOptions {
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct SharedTerm {
     pub term: String,
-    pub source_names: Vec<String>,
-    pub target_names: Vec<String>,
+    pub source_labels: Vec<String>,
+    pub target_labels: Vec<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct ClosestPair {
     pub source_term: String,
-    pub source_name: String,
+    pub source_label: String,
     pub target_term: String,
-    pub target_name: String,
+    pub target_label: String,
     pub similarity: f64,
 }
 
@@ -144,12 +144,12 @@ fn shared_terms(
     let mut shared: Vec<SharedTerm> = source
         .names_by_term
         .iter()
-        .filter_map(|(term, source_names)| {
-            let target_names = target.names_by_term.get(term)?;
+        .filter_map(|(term, source_labels)| {
+            let target_labels = target.names_by_term.get(term)?;
             Some(SharedTerm {
                 term: term.clone(),
-                source_names: source_names.iter().cloned().collect(),
-                target_names: target_names.iter().cloned().collect(),
+                source_labels: source_labels.iter().cloned().collect(),
+                target_labels: target_labels.iter().cloned().collect(),
             })
         })
         .collect();
@@ -185,9 +185,9 @@ fn closest_pair(
     let (similarity, source_term, target_term) = best?;
     Some(ClosestPair {
         source_term: source_term.clone(),
-        source_name: source.names_by_term[source_term].iter().next()?.clone(),
+        source_label: source.names_by_term[source_term].iter().next()?.clone(),
         target_term: target_term.clone(),
-        target_name: target.names_by_term[target_term].iter().next()?.clone(),
+        target_label: target.names_by_term[target_term].iter().next()?.clone(),
         similarity,
     })
 }
@@ -363,9 +363,9 @@ mod tests {
             .unwrap();
         assert_eq!(link.shared.len(), 1);
         assert_eq!(link.shared[0].term, "garlic");
-        assert_eq!(link.shared[0].source_names, ["Alho"]);
+        assert_eq!(link.shared[0].source_labels, ["Alho"]);
         assert_eq!(
-            link.shared[0].target_names,
+            link.shared[0].target_labels,
             ["Alho picado", "Dente de alho"]
         );
         assert!(link.closest.is_none());
@@ -409,7 +409,7 @@ mod tests {
             .unwrap();
         let closest = link.closest.unwrap();
         assert_eq!(
-            (closest.source_name.as_str(), closest.target_name.as_str()),
+            (closest.source_label.as_str(), closest.target_label.as_str()),
             ("Alho", "Cebola")
         );
         assert_eq!(link.shared, Vec::<SharedTerm>::new());

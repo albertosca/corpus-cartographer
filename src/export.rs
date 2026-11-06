@@ -183,6 +183,9 @@ impl EngineExport {
             if !item_ids.insert(item.id) {
                 return Err(ExportError(format!("item {} appears twice", item.id)));
             }
+            if item.badges.iter().any(String::is_empty) {
+                return Err(ExportError(format!("item {} has an empty badge", item.id)));
+            }
             match (item.status, item.subtheme_id) {
                 (Status::Assigned, Some(subtheme_id)) => {
                     if !matches!(parent_by_theme.get(&subtheme_id), Some(Some(_))) {

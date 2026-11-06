@@ -5,21 +5,21 @@ use std::collections::BTreeMap;
 
 use serde::Serialize;
 
-use crate::export::{EngineExport, Positions, Status};
+use crate::export::{EngineExport, Format, Positions, Status};
 use crate::geometry::round_to;
 use crate::layout::Layout;
+use crate::legacy_v2;
 use crate::links::{ClosestPair, Link, LinkOptions};
 use crate::vectors::FlavourSpace;
 use crate::warning::Warning;
 
-pub const LINKS_SCHEMA: &str = "recipes-cartographer/engine-links";
-pub const LINKS_VERSION: u32 = 2;
+pub const LINKS_SCHEMA: &str = "corpus-cartographer/engine-links";
+pub const LINKS_VERSION: u32 = 3;
 pub const ENGINE_VERSION: &str = env!("CARGO_PKG_VERSION");
 const SIMILARITY_DECIMALS: i32 = 4;
 
 #[derive(Debug, Clone, Copy, Serialize)]
 pub struct Counts {
-    #[serde(rename = "recipes")]
     pub items: usize,
     pub placed: usize,
     pub waiting: usize,
@@ -49,15 +49,15 @@ impl Counts {
 }
 
 #[derive(Serialize)]
-struct LinksDocument<'a> {
+struct LinksDocument<'a, L: Serialize, C: Serialize> {
     schema: &'static str,
     version: u32,
     engine_version: &'static str,
     input_sha256: &'a str,
-    links: Vec<Link>,
+    links: Vec<L>,
     positions: Positions,
     warnings: &'a [Warning],
-    counts: Counts,
+    counts: C,
     options: LinkOptions,
 }
 
@@ -80,23 +80,38 @@ fn pretty<T: Serialize>(document: &T) -> String {
 }
 
 pub fn links_json(
+    format: Format,
     input_sha256: &str,
     layout: &Layout,
     links: &[Link],
     counts: Counts,
     options: &LinkOptions,
 ) -> String {
-    pretty(&LinksDocument {
-        schema: LINKS_SCHEMA,
-        version: LINKS_VERSION,
-        engine_version: ENGINE_VERSION,
-        input_sha256,
-        links: links.iter().map(rounded).collect(),
-        positions: layout.positions(),
-        warnings: &layout.warnings,
-        counts,
-        options: *options,
-    })
+    let rounded_links: Vec<Link> = links.iter().map(rounded).collect();
+    match format {
+        Format::V3 => pretty(&LinksDocument {
+            schema: LINKS_SCHEMA,
+            version: LINKS_VERSION,
+            engine_version: ENGINE_VERSION,
+            input_sha256,
+            links: rounded_links,
+            positions: layout.positions(),
+            warnings: &layout.warnings,
+            counts,
+            options: *options,
+        }),
+        Format::V2 => pretty(&LinksDocument {
+            schema: legacy_v2::LINKS_SCHEMA,
+            version: legacy_v2::LINKS_VERSION,
+            engine_version: ENGINE_VERSION,
+            input_sha256,
+            links: rounded_links.iter().map(legacy_v2::LinkV2::from).collect(),
+            positions: layout.positions(),
+            warnings: &layout.warnings,
+            counts: legacy_v2::CountsV2::from(counts),
+            options: *options,
+        }),
+    }
 }
 
 #[derive(Serialize)]
@@ -158,8 +173,11 @@ fn theme_key(id: u64) -> String {
     format!("theme:{id}")
 }
 
-fn item_key(id: u64) -> String {
-    format!("recipe:{id}")
+fn item_key(format: Format, id: u64) -> String {
+    match format {
+        Format::V3 => format!("item:{id}"),
+        Format::V2 => legacy_v2::item_key(id),
+    }
 }
 
 /// Assigned item ids per sub-theme, sorted.
@@ -176,7 +194,7 @@ fn members_by_subtheme(export: &EngineExport) -> BTreeMap<u64, Vec<u64>> {
     members
 }
 
-fn nodes(export: &EngineExport, layout: &Layout, innermost: bool) -> Vec<Node> {
+fn nodes(format: Format, export: &EngineExport, layout: &Layout, innermost: bool) -> Vec<Node> {
     let mut items: Vec<_> = export.items.iter().collect();
     items.sort_by_key(|item| item.id);
     items
@@ -195,7 +213,7 @@ fn nodes(export: &EngineExport, layout: &Layout, innermost: bool) -> Vec<Node> {
                 })
                 .map(theme_key);
             Node {
-                id: item_key(item.id),
+                id: item_key(format, item.id),
                 label: item.title.clone(),
                 x: point[0],
                 y: point[1],
@@ -213,6 +231,7 @@ fn sorted_themes(export: &EngineExport) -> Vec<&crate::export::Theme> {
 }
 
 fn members_under(
+    format: Format,
     export: &EngineExport,
     members: &BTreeMap<u64, Vec<u64>>,
     top_level_id: u64,
@@ -224,10 +243,10 @@ fn members_under(
         .flat_map(|subtheme| members.get(&subtheme.id).cloned().unwrap_or_default())
         .collect();
     ids.sort_unstable();
-    ids.into_iter().map(item_key).collect()
+    ids.into_iter().map(|id| item_key(format, id)).collect()
 }
 
-pub fn map_spec_v1(export: &EngineExport, layout: &Layout) -> String {
+pub fn map_spec_v1(format: Format, export: &EngineExport, layout: &Layout) -> String {
     let members = members_by_subtheme(export);
     let territories = sorted_themes(export)
         .into_iter()
@@ -235,7 +254,7 @@ pub fn map_spec_v1(export: &EngineExport, layout: &Layout) -> String {
         .map(|theme| TerritoryV1 {
             id: theme_key(theme.id),
             name: theme.name.clone(),
-            members: members_under(export, &members, theme.id),
+            members: members_under(format, export, &members, theme.id),
             centroid: layout
                 .territories
                 .get(&theme.id)
@@ -246,7 +265,7 @@ pub fn map_spec_v1(export: &EngineExport, layout: &Layout) -> String {
     pretty(&MapSpecV1 {
         version: "1",
         territories,
-        nodes: nodes(export, layout, false),
+        nodes: nodes(format, export, layout, false),
     })
 }
 
@@ -259,9 +278,9 @@ fn reason_text(link: &Link, edge_source: u64) -> String {
             .as_ref()
             .map(|closest| {
                 let (first, second) = if forward {
-                    (&closest.source_name, &closest.target_name)
+                    (&closest.source_label, &closest.target_label)
                 } else {
-                    (&closest.target_name, &closest.source_name)
+                    (&closest.target_label, &closest.source_label)
                 };
                 format!("parecidos: {first} ~ {second}")
             })
@@ -272,9 +291,9 @@ fn reason_text(link: &Link, edge_source: u64) -> String {
             .iter()
             .filter_map(|shared| {
                 let side = if forward {
-                    &shared.source_names
+                    &shared.source_labels
                 } else {
-                    &shared.target_names
+                    &shared.target_labels
                 };
                 side.first().map(String::as_str)
             })
@@ -285,11 +304,11 @@ fn reason_text(link: &Link, edge_source: u64) -> String {
 
 // The weight is a similarity, which a floor below zero lets go negative;
 // corpus-map wants it `>= 0`.
-fn edge(lower: u64, higher: u64, link: &Link) -> Edge {
+fn edge(format: Format, lower: u64, higher: u64, link: &Link) -> Edge {
     let reason = reason_text(link, lower);
     Edge {
-        source: item_key(lower),
-        target: item_key(higher),
+        source: item_key(format, lower),
+        target: item_key(format, higher),
         weight: round_to(link.similarity, SIMILARITY_DECIMALS).max(0.0),
         reason: (!reason.is_empty()).then_some(reason),
     }
@@ -298,7 +317,12 @@ fn edge(lower: u64, higher: u64, link: &Link) -> Edge {
 /// corpus-map's `MapSpec` version 1 with `parent` and `edges`: a theme lists
 /// no members of its own (its members are its sub-themes'), and nodes sit
 /// in sub-themes.
-pub fn map_spec_nested(export: &EngineExport, layout: &Layout, links: &[Link]) -> String {
+pub fn map_spec_nested(
+    format: Format,
+    export: &EngineExport,
+    layout: &Layout,
+    links: &[Link],
+) -> String {
     let members = members_by_subtheme(export);
     let territories = sorted_themes(export)
         .into_iter()
@@ -313,7 +337,7 @@ pub fn map_spec_nested(export: &EngineExport, layout: &Layout, links: &[Link]) -
                     .cloned()
                     .unwrap_or_default()
                     .into_iter()
-                    .map(item_key)
+                    .map(|id| item_key(format, id))
                     .collect(),
             },
             centroid: if theme.parent_id.is_none() {
@@ -339,12 +363,12 @@ pub fn map_spec_nested(export: &EngineExport, layout: &Layout, links: &[Link]) -
     }
     let edges = best_by_pair
         .into_iter()
-        .map(|((lower, higher), link)| edge(lower, higher, link))
+        .map(|((lower, higher), link)| edge(format, lower, higher, link))
         .collect();
     pretty(&MapSpecNested {
         version: "1",
         territories,
-        nodes: nodes(export, layout, true),
+        nodes: nodes(format, export, layout, true),
         edges,
     })
 }
@@ -374,8 +398,8 @@ mod tests {
     fn a_shared_reason_names_the_edge_source_term() {
         let shared = vec![SharedTerm {
             term: "garlic".into(),
-            source_names: vec!["alho de 7".into()],
-            target_names: vec!["alho de 3".into()],
+            source_labels: vec!["alho de 7".into()],
+            target_labels: vec!["alho de 3".into()],
         }];
         let reversed = link(7, 3, shared, None);
         assert_eq!(reason_text(&reversed, 3), "em comum: alho de 3");
@@ -386,9 +410,9 @@ mod tests {
     fn a_closest_reason_reads_from_the_edge_source() {
         let closest = ClosestPair {
             source_term: "lime".into(),
-            source_name: "limão de 7".into(),
+            source_label: "limão de 7".into(),
             target_term: "lemon".into(),
-            target_name: "siciliano de 3".into(),
+            target_label: "siciliano de 3".into(),
             similarity: 0.8,
         };
         let reversed = link(7, 3, Vec::new(), Some(closest));
@@ -406,16 +430,16 @@ mod tests {
     fn a_negative_similarity_is_sent_as_weight_zero() {
         let mut below_zero = link(3, 7, Vec::new(), None);
         below_zero.similarity = -0.25;
-        assert_eq!(edge(3, 7, &below_zero).weight, 0.0);
+        assert_eq!(edge(Format::V3, 3, 7, &below_zero).weight, 0.0);
     }
 
     #[test]
     fn a_link_with_nothing_to_say_sends_no_reason() {
         let silent = link(3, 7, Vec::new(), None);
-        let sent = serde_json::to_value(edge(3, 7, &silent)).unwrap();
+        let sent = serde_json::to_value(edge(Format::V3, 3, 7, &silent)).unwrap();
         assert_eq!(
             sent,
-            serde_json::json!({ "source": "recipe:3", "target": "recipe:7", "weight": 0.9 })
+            serde_json::json!({ "source": "item:3", "target": "item:7", "weight": 0.9 })
         );
     }
 }

@@ -42,6 +42,82 @@ fn the_export_schema_rejects_an_unknown_field() {
 }
 
 #[test]
+fn the_v3_golden_export_matches_its_schema() {
+    let errors = schema_errors(
+        "engine-export.v3.schema.json",
+        &read_json("engine-export.v3.json"),
+    );
+    assert!(errors.is_empty(), "{errors:#?}");
+}
+
+#[test]
+fn the_v3_export_schema_rejects_an_unknown_field() {
+    let mut export = read_json("engine-export.v3.json");
+    export["items"][0]["creator_name"] = "someone".into();
+    assert_ne!(
+        schema_errors("engine-export.v3.schema.json", &export),
+        Vec::<String>::new()
+    );
+}
+
+#[test]
+fn the_v3_golden_export_parses_into_the_engine_types() {
+    let text = fs::read_to_string(contracts_directory().join("engine-export.v3.json")).unwrap();
+    let (export, format) = corpus_cartographer::export::parse(&text).unwrap();
+    assert_eq!(format, corpus_cartographer::export::Format::V3);
+    assert_eq!((export.themes.len(), export.items.len()), (6, 7));
+    assert_eq!(export.rejected_pairs, vec![[101, 102]]);
+}
+
+#[test]
+fn a_v3_document_does_not_pass_the_v2_schema_nor_the_reverse() {
+    assert_ne!(
+        schema_errors(
+            "engine-export.v2.schema.json",
+            &read_json("engine-export.v3.json")
+        ),
+        Vec::<String>::new()
+    );
+    assert_ne!(
+        schema_errors(
+            "engine-export.v3.schema.json",
+            &read_json("engine-export.v2.json")
+        ),
+        Vec::<String>::new()
+    );
+}
+
+#[test]
+fn an_unknown_version_names_both_accepted_ones() {
+    for text in [
+        r#"{"schema":"corpus-cartographer/engine-export","version":4}"#,
+        r#"{"schema":"recipes-cartographer/engine-export","version":1}"#,
+    ] {
+        let message = corpus_cartographer::export::parse(text)
+            .unwrap_err()
+            .to_string();
+        assert!(
+            message.contains("version 3") && message.contains("version 2"),
+            "{message}"
+        );
+    }
+}
+
+#[test]
+fn an_empty_badge_is_refused_by_the_schema_and_by_the_parser() {
+    let mut export = read_json("engine-export.v3.json");
+    export["items"][0]["badges"] = serde_json::json!([""]);
+    assert_ne!(
+        schema_errors("engine-export.v3.schema.json", &export),
+        Vec::<String>::new()
+    );
+    let message = corpus_cartographer::export::parse(&export.to_string())
+        .unwrap_err()
+        .to_string();
+    assert!(message.contains("empty badge"), "{message}");
+}
+
+#[test]
 fn the_golden_export_parses_into_the_engine_types() {
     let text = fs::read_to_string(contracts_directory().join("engine-export.v2.json")).unwrap();
     let (export, format) = corpus_cartographer::export::parse(&text).unwrap();
@@ -54,7 +130,11 @@ fn the_golden_export_parses_into_the_engine_types() {
 mod support;
 
 fn golden_output() -> corpus_cartographer::EngineOutput {
-    let input = fs::read_to_string(contracts_directory().join("engine-export.v2.json")).unwrap();
+    golden_output_of("engine-export.v2.json")
+}
+
+fn golden_output_of(export_name: &str) -> corpus_cartographer::EngineOutput {
+    let input = fs::read_to_string(contracts_directory().join(export_name)).unwrap();
     corpus_cartographer::run(
         &input,
         &support::mini_embeddings(),
@@ -74,6 +154,30 @@ fn every_output_matches_its_schema() {
         let errors = schema_errors(schema, &serde_json::from_str(document).unwrap());
         assert!(errors.is_empty(), "{schema}: {errors:#?}");
     }
+}
+
+#[test]
+fn every_v3_output_matches_its_schema_and_names_items_with_the_item_prefix() {
+    let output = golden_output_of("engine-export.v3.json");
+    for (schema, document) in [
+        ("engine-links.v3.schema.json", &output.links_json),
+        ("map-spec.v1.schema.json", &output.map_spec_v1),
+        ("map-spec.nested.schema.json", &output.map_spec_nested),
+    ] {
+        let errors = schema_errors(schema, &serde_json::from_str(document).unwrap());
+        assert!(errors.is_empty(), "{schema}: {errors:#?}");
+    }
+    let spec: serde_json::Value = serde_json::from_str(&output.map_spec_nested).unwrap();
+    for node in spec["nodes"].as_array().unwrap() {
+        assert!(node["id"].as_str().unwrap().starts_with("item:"), "{node}");
+    }
+    let old: serde_json::Value = serde_json::from_str(&golden_output().map_spec_nested).unwrap();
+    assert!(
+        old["nodes"][0]["id"]
+            .as_str()
+            .unwrap()
+            .starts_with("recipe:")
+    );
 }
 
 #[test]

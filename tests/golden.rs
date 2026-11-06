@@ -14,7 +14,11 @@ fn contracts_directory() -> PathBuf {
 }
 
 fn output() -> corpus_cartographer::EngineOutput {
-    let input = fs::read_to_string(contracts_directory().join("engine-export.v2.json")).unwrap();
+    output_of("engine-export.v2.json")
+}
+
+fn output_of(export_name: &str) -> corpus_cartographer::EngineOutput {
+    let input = fs::read_to_string(contracts_directory().join(export_name)).unwrap();
     corpus_cartographer::run(
         &input,
         &support::mini_embeddings(),
@@ -27,6 +31,20 @@ fn output() -> corpus_cartographer::EngineOutput {
 fn the_links_document_matches_the_golden() {
     let path = contracts_directory().join("engine-links.v2.json");
     let output = output();
+    if std::env::var("UPDATE_GOLDEN").as_deref() == Ok("1") {
+        fs::write(&path, &output.links_json).unwrap();
+    }
+    assert_eq!(
+        fs::read_to_string(&path).unwrap(),
+        output.links_json,
+        "rerun with UPDATE_GOLDEN=1 and review the diff"
+    );
+}
+
+#[test]
+fn the_v3_links_document_matches_the_golden() {
+    let path = contracts_directory().join("engine-links.v3.json");
+    let output = output_of("engine-export.v3.json");
     if std::env::var("UPDATE_GOLDEN").as_deref() == Ok("1") {
         fs::write(&path, &output.links_json).unwrap();
     }

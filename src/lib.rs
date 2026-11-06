@@ -15,7 +15,7 @@ use std::fmt::Write;
 use sha2::{Digest, Sha256};
 
 use crate::embeddings::Embeddings;
-use crate::export::ExportError;
+use crate::export::{ExportError, Format};
 use crate::links::LinkOptions;
 use crate::output::Counts;
 use crate::vectors::FlavourSpace;
@@ -38,8 +38,8 @@ pub fn run(
     embeddings: &Embeddings,
     options: &LinkOptions,
 ) -> Result<EngineOutput, ExportError> {
-    let (export, _format) = export::parse(input_text)?;
-    Ok(build(input_text, &export, embeddings, options))
+    let (export, format) = export::parse(input_text)?;
+    Ok(build(format, input_text, &export, embeddings, options))
 }
 
 /// `run` for a corpus with no embeddings: each term the export names becomes
@@ -48,7 +48,7 @@ pub fn run_without_embeddings(
     input_text: &str,
     options: &LinkOptions,
 ) -> Result<EngineOutput, NoEmbeddingsError> {
-    let (export, _format) = export::parse(input_text)?;
+    let (export, format) = export::parse(input_text)?;
     let terms = export.terms();
     let items_with_terms = export
         .items
@@ -57,7 +57,7 @@ pub fn run_without_embeddings(
         .count();
     check_axis_budget(terms.len(), items_with_terms)?;
     let embeddings = Embeddings::one_axis_per_term(terms.into_iter().collect());
-    Ok(build(input_text, &export, &embeddings, options))
+    Ok(build(format, input_text, &export, &embeddings, options))
 }
 
 /// Layout and links grow roughly with the cube of the corpus (measured: 1000
@@ -103,6 +103,7 @@ impl From<ExportError> for NoEmbeddingsError {
 }
 
 fn build(
+    format: Format,
     input_text: &str,
     export: &export::EngineExport,
     embeddings: &Embeddings,
@@ -125,12 +126,17 @@ fn build(
     }
     let links = links::find_links(export, &space, embeddings, options);
     let counts = Counts::of(export, &space, &links);
+    let noun = match format {
+        Format::V3 => "items",
+        Format::V2 => legacy_v2::COUNT_NOUN,
+    };
     EngineOutput {
-        links_json: output::links_json(&input_sha256, &layout, &links, counts, options),
-        map_spec_v1: output::map_spec_v1(export, &layout),
-        map_spec_nested: output::map_spec_nested(export, &layout, &links),
+        links_json: output::links_json(format, &input_sha256, &layout, &links, counts, options),
+        map_spec_v1: output::map_spec_v1(format, export, &layout),
+        map_spec_nested: output::map_spec_nested(format, export, &layout, &links),
         summary: format!(
-            "recipes={} placed={} waiting={} with_vector={} links={} warnings={}",
+            "{}={} placed={} waiting={} with_vector={} links={} warnings={}",
+            noun,
             counts.items,
             counts.placed,
             counts.waiting,

@@ -1,0 +1,170 @@
+{
+  "schema": "corpus-cartographer/engine-export",
+  "version": 3,
+  "taxonomy_version": 2,
+  "themes": [
+    {
+      "id": 1,
+      "parent_id": null,
+      "name": "Churrasco",
+      "terms": []
+    },
+    {
+      "id": 2,
+      "parent_id": null,
+      "name": "Massas",
+      "terms": [
+        "flour"
+      ]
+    },
+    {
+      "id": 11,
+      "parent_id": 1,
+      "name": "Cortes",
+      "terms": []
+    },
+    {
+      "id": 12,
+      "parent_id": 1,
+      "name": "Molhos",
+      "terms": []
+    },
+    {
+      "id": 21,
+      "parent_id": 2,
+      "name": "Frescas",
+      "terms": []
+    },
+    {
+      "id": 22,
+      "parent_id": 2,
+      "name": "Secas",
+      "terms": []
+    }
+  ],
+  "items": [
+    {
+      "id": 101,
+      "title": "Synthetic 101",
+      "subtheme_id": 11,
+      "status": "assigned",
+      "badges": [],
+      "terms": [
+        {
+          "label": "Picanha",
+          "term": "beef"
+        },
+        {
+          "label": "Alho",
+          "term": "garlic"
+        }
+      ]
+    },
+    {
+      "id": 102,
+      "title": "Synthetic 102",
+      "subtheme_id": 12,
+      "status": "assigned",
+      "badges": [],
+      "terms": [
+        {
+          "label": "Limão",
+          "term": "lime"
+        },
+        {
+          "label": "Alho picado",
+          "term": "garlic"
+        }
+      ]
+    },
+    {
+      "id": 103,
+      "title": "Synthetic 103",
+      "subtheme_id": 21,
+      "status": "assigned",
+      "badges": [],
+      "terms": [
+        {
+          "label": "Farinha",
+          "term": "flour"
+        },
+        {
+          "label": "Ovo",
+          "term": "egg"
+        }
+      ]
+    },
+    {
+      "id": 104,
+      "title": "Synthetic 104",
+      "subtheme_id": 22,
+      "status": "assigned",
+      "badges": [],
+      "terms": [
+        {
+          "label": "Tomate",
+          "term": "tomato"
+        },
+        {
+          "label": "Alho",
+          "term": "garlic"
+        }
+      ]
+    },
+    {
+      "id": 105,
+      "title": "Synthetic 105",
+      "subtheme_id": 22,
+      "status": "assigned",
+      "badges": [
+        "sem receita"
+      ],
+      "terms": []
+    },
+    {
+      "id": 106,
+      "title": "Synthetic 106",
+      "subtheme_id": null,
+      "status": "needs_owner",
+      "badges": [],
+      "terms": [
+        {
+          "label": "Cebola",
+          "term": "onion"
+        }
+      ]
+    },
+    {
+      "id": 107,
+      "title": "Synthetic 107",
+      "subtheme_id": null,
+      "status": "unclassified",
+      "badges": [],
+      "terms": [
+        {
+          "label": "Sal",
+          "term": null
+        }
+      ]
+    }
+  ],
+  "previous": {
+    "territories": {
+      "1": [
+        -30.0,
+        0.0
+      ],
+      "2": [
+        30.0,
+        0.0
+      ]
+    },
+    "subthemes": {}
+  },
+  "rejected_pairs": [
+    [
+      101,
+      102
+    ]
+  ]
+}

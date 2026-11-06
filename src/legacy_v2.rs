@@ -2,9 +2,11 @@
 //! v3: ingredients become item terms, the quantity seal becomes a badge.
 //! This is the only file that keeps the old words.
 
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 use crate::export::{EngineExport, ExportError, Item, ItemTerm, Positions, Status, Theme};
+use crate::links::Link;
+use crate::output::Counts;
 
 pub const SCHEMA: &str = "recipes-cartographer/engine-export";
 pub const VERSION: u32 = 2;
@@ -101,4 +103,90 @@ pub fn parse(text: &str) -> Result<EngineExport, ExportError> {
         previous: export.previous,
         rejected_pairs: export.rejected_pairs,
     })
+}
+
+// ---- Output side: what a run over a v2 export has always written. ----
+
+pub const LINKS_SCHEMA: &str = "recipes-cartographer/engine-links";
+pub const LINKS_VERSION: u32 = 2;
+/// The noun the one-line run summary has always used for items.
+pub const COUNT_NOUN: &str = "recipes";
+
+pub fn item_key(id: u64) -> String {
+    format!("recipe:{id}")
+}
+
+#[derive(Serialize)]
+pub struct CountsV2 {
+    recipes: usize,
+    placed: usize,
+    waiting: usize,
+    with_vector: usize,
+    links: usize,
+}
+
+impl From<Counts> for CountsV2 {
+    fn from(counts: Counts) -> Self {
+        Self {
+            recipes: counts.items,
+            placed: counts.placed,
+            waiting: counts.waiting,
+            with_vector: counts.with_vector,
+            links: counts.links,
+        }
+    }
+}
+
+#[derive(Serialize)]
+pub struct LinkV2<'a> {
+    source: u64,
+    target: u64,
+    similarity: f64,
+    crosses_theme: bool,
+    shared: Vec<SharedTermV2<'a>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    closest: Option<ClosestPairV2<'a>>,
+}
+
+#[derive(Serialize)]
+struct SharedTermV2<'a> {
+    term: &'a str,
+    source_names: &'a [String],
+    target_names: &'a [String],
+}
+
+#[derive(Serialize)]
+struct ClosestPairV2<'a> {
+    source_term: &'a str,
+    source_name: &'a str,
+    target_term: &'a str,
+    target_name: &'a str,
+    similarity: f64,
+}
+
+impl<'a> From<&'a Link> for LinkV2<'a> {
+    fn from(link: &'a Link) -> Self {
+        Self {
+            source: link.source,
+            target: link.target,
+            similarity: link.similarity,
+            crosses_theme: link.crosses_theme,
+            shared: link
+                .shared
+                .iter()
+                .map(|shared| SharedTermV2 {
+                    term: &shared.term,
+                    source_names: &shared.source_labels,
+                    target_names: &shared.target_labels,
+                })
+                .collect(),
+            closest: link.closest.as_ref().map(|closest| ClosestPairV2 {
+                source_term: &closest.source_term,
+                source_name: &closest.source_label,
+                target_term: &closest.target_term,
+                target_name: &closest.target_label,
+                similarity: closest.similarity,
+            }),
+        }
+    }
 }

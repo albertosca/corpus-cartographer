@@ -1,0 +1,84 @@
+{
+  "schema": "corpus-cartographer/engine-links",
+  "version": 3,
+  "engine_version": "0.4.0",
+  "input_sha256": "d6b4a5a61a941d48b3a96eb7f9f7596026e8a33573dd564832d25217bb963483",
+  "links": [
+    {
+      "source": 102,
+      "target": 104,
+      "similarity": 0.3393,
+      "crosses_theme": true,
+      "shared": [
+        {
+          "term": "garlic",
+          "source_labels": [
+            "Alho picado"
+          ],
+          "target_labels": [
+            "Alho"
+          ]
+        }
+      ]
+    },
+    {
+      "source": 104,
+      "target": 102,
+      "similarity": 0.3393,
+      "crosses_theme": true,
+      "shared": [
+        {
+          "term": "garlic",
+          "source_labels": [
+            "Alho"
+          ],
+          "target_labels": [
+            "Alho picado"
+          ]
+        }
+      ]
+    }
+  ],
+  "positions": {
+    "territories": {
+      "1": [
+        -91.074423,
+        0.0
+      ],
+      "2": [
+        91.074423,
+        0.0
+      ]
+    },
+    "subthemes": {
+      "11": [
+        -129.32568,
+        0.0
+      ],
+      "12": [
+        -52.823165,
+        0.0
+      ],
+      "21": [
+        52.823165,
+        0.0
+      ],
+      "22": [
+        129.32568,
+        0.0
+      ]
+    }
+  },
+  "warnings": [],
+  "counts": {
+    "items": 7,
+    "placed": 5,
+    "waiting": 2,
+    "with_vector": 5,
+    "links": 2
+  },
+  "options": {
+    "max_links": 3,
+    "floor": 0.0
+  }
+}
