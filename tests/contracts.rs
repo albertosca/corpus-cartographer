@@ -1,0 +1,154 @@
+//! Each contract document validates against its versioned schema, and the
+//! golden export parses into the engine's own types (which refuse unknown
+//! fields), so Rails and Rust cannot drift apart silently.
+
+use std::fs;
+use std::path::PathBuf;
+
+pub fn contracts_directory() -> PathBuf {
+    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("contracts")
+}
+
+pub fn read_json(name: &str) -> serde_json::Value {
+    serde_json::from_str(&fs::read_to_string(contracts_directory().join(name)).unwrap()).unwrap()
+}
+
+/// Every error message for `instance` against the schema in `schema_name`.
+pub fn schema_errors(schema_name: &str, instance: &serde_json::Value) -> Vec<String> {
+    let validator = jsonschema::validator_for(&read_json(schema_name)).unwrap();
+    validator
+        .iter_errors(instance)
+        .map(|error| error.to_string())
+        .collect()
+}
+
+#[test]
+fn the_golden_export_matches_its_schema() {
+    let errors = schema_errors(
+        "engine-export.v2.schema.json",
+        &read_json("engine-export.v2.json"),
+    );
+    assert!(errors.is_empty(), "{errors:#?}");
+}
+
+#[test]
+fn the_export_schema_rejects_an_unknown_field() {
+    let mut export = read_json("engine-export.v2.json");
+    export["recipes"][0]["creator_name"] = "someone".into();
+    assert_ne!(
+        schema_errors("engine-export.v2.schema.json", &export),
+        Vec::<String>::new()
+    );
+}
+
+#[test]
+fn the_golden_export_parses_into_the_engine_types() {
+    let text = fs::read_to_string(contracts_directory().join("engine-export.v2.json")).unwrap();
+    let export = corpus_cartographer::export::parse(&text).unwrap();
+    assert_eq!((export.themes.len(), export.recipes.len()), (6, 7));
+    assert_eq!(export.top_level_of(22), Some(2));
+    assert_eq!(export.rejected_pairs, vec![[101, 102]]);
+}
+
+mod support;
+
+fn golden_output() -> corpus_cartographer::EngineOutput {
+    let input = fs::read_to_string(contracts_directory().join("engine-export.v2.json")).unwrap();
+    corpus_cartographer::run(&input, &support::mini_epicure(), &support::golden_options()).unwrap()
+}
+
+#[test]
+fn every_output_matches_its_schema() {
+    let output = golden_output();
+    for (schema, document) in [
+        ("engine-links.v2.schema.json", &output.links_json),
+        ("map-spec.v1.schema.json", &output.map_spec_v1),
+        ("map-spec.nested.schema.json", &output.map_spec_nested),
+    ] {
+        let errors = schema_errors(schema, &serde_json::from_str(document).unwrap());
+        assert!(errors.is_empty(), "{schema}: {errors:#?}");
+    }
+}
+
+#[test]
+fn map_spec_v1_membership_agrees_both_ways() {
+    // corpus-map's validateSpec refuses a spec where a node's territory and
+    // the territory's members disagree.
+    let spec: serde_json::Value = serde_json::from_str(&golden_output().map_spec_v1).unwrap();
+    for node in spec["nodes"].as_array().unwrap() {
+        let holders: Vec<&str> = spec["territories"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter(|territory| {
+                territory["members"]
+                    .as_array()
+                    .unwrap()
+                    .contains(&node["id"])
+            })
+            .map(|territory| territory["id"].as_str().unwrap())
+            .collect();
+        assert_eq!(
+            holders,
+            node["territory"].as_str().into_iter().collect::<Vec<_>>(),
+            "{}",
+            node["id"]
+        );
+    }
+}
+
+#[test]
+fn map_spec_nested_follows_the_corpus_map_rules_a_schema_cannot_state() {
+    // corpus-map's validateSpec: a parent lists no members (its members are
+    // its children's), nodes belong to leaves and agree with the leaf's
+    // members both ways, a parent has no parent, and edges join two
+    // different existing nodes, at most once per pair.
+    let spec: serde_json::Value = serde_json::from_str(&golden_output().map_spec_nested).unwrap();
+    let territories = spec["territories"].as_array().unwrap();
+    let parents: Vec<&str> = territories
+        .iter()
+        .filter_map(|territory| territory["parent"].as_str())
+        .collect();
+    assert!(!parents.is_empty(), "the golden export has sub-themes");
+    for territory in territories {
+        let id = territory["id"].as_str().unwrap();
+        if parents.contains(&id) {
+            assert_eq!(territory["members"], serde_json::json!([]), "{id}");
+            assert!(territory.get("parent").is_none(), "{id} nests twice");
+        }
+    }
+    for node in spec["nodes"].as_array().unwrap() {
+        let holders: Vec<&str> = territories
+            .iter()
+            .filter(|territory| {
+                territory["members"]
+                    .as_array()
+                    .unwrap()
+                    .contains(&node["id"])
+            })
+            .map(|territory| territory["id"].as_str().unwrap())
+            .collect();
+        assert_eq!(
+            holders,
+            node["territory"].as_str().into_iter().collect::<Vec<_>>(),
+            "{}",
+            node["id"]
+        );
+    }
+    let node_ids: Vec<&serde_json::Value> = spec["nodes"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|node| &node["id"])
+        .collect();
+    let mut pairs = std::collections::BTreeSet::new();
+    let edges = spec["edges"].as_array().unwrap();
+    assert!(!edges.is_empty(), "the golden export has links");
+    for edge in edges {
+        assert_ne!(edge["source"], edge["target"]);
+        assert!(node_ids.contains(&&edge["source"]) && node_ids.contains(&&edge["target"]));
+        let mut pair = [edge["source"].to_string(), edge["target"].to_string()];
+        pair.sort();
+        assert!(pairs.insert(pair), "{edge}");
+    }
+}

@@ -1,0 +1,47 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "recipes-cartographer/map-spec/v1",
+  "title": "corpus-map MapSpec version 1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["version", "territories", "nodes"],
+  "properties": {
+    "version": { "const": "1" },
+    "territories": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "name", "members", "centroid"],
+        "properties": {
+          "id": { "type": "string" },
+          "name": { "type": "string" },
+          "members": { "type": "array", "items": { "type": "string" } },
+          "centroid": { "$ref": "#/$defs/point" },
+          "boundary": { "type": "array", "items": { "$ref": "#/$defs/point" } }
+        }
+      }
+    },
+    "nodes": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "label", "x", "y", "territory"],
+        "properties": {
+          "id": { "type": "string" },
+          "label": { "type": "string" },
+          "x": { "type": "number" },
+          "y": { "type": "number" },
+          "territory": { "type": ["string", "null"] },
+          "state": { "enum": ["visited", "unvisited"] },
+          "badges": { "type": "array", "items": { "type": "string" } },
+          "meta": {}
+        }
+      }
+    }
+  },
+  "$defs": {
+    "point": { "type": "array", "items": { "type": "number" }, "minItems": 2, "maxItems": 2 }
+  }
+}

@@ -1,0 +1,85 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "recipes-cartographer/engine-export/v2",
+  "title": "Map engine input, written by Rails (Export::EngineExport)",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "version", "taxonomy_version", "themes", "recipes", "previous", "rejected_pairs"],
+  "properties": {
+    "rejected_pairs": {
+      "description": "Recipe pairs the owner hid, lower id first; the engine never links them.",
+      "type": "array",
+      "items": {
+        "type": "array",
+        "prefixItems": [{ "type": "integer", "minimum": 1 }, { "type": "integer", "minimum": 1 }],
+        "items": false,
+        "minItems": 2
+      }
+    },
+    "schema": { "const": "recipes-cartographer/engine-export" },
+    "version": { "const": 2 },
+    "taxonomy_version": { "type": ["integer", "null"], "minimum": 1 },
+    "themes": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "parent_id", "name", "epicure_terms"],
+        "properties": {
+          "id": { "type": "integer", "minimum": 1 },
+          "parent_id": { "type": ["integer", "null"], "minimum": 1 },
+          "name": { "type": "string", "minLength": 1 },
+          "epicure_terms": { "type": "array", "items": { "type": "string" } }
+        }
+      }
+    },
+    "recipes": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "title", "subtheme_id", "status", "seal", "ingredients"],
+        "properties": {
+          "id": { "type": "integer", "minimum": 1 },
+          "title": { "type": "string" },
+          "subtheme_id": { "type": ["integer", "null"], "minimum": 1 },
+          "status": { "enum": ["assigned", "needs_owner", "unclassified"] },
+          "seal": { "enum": ["complete", "absent", "none"] },
+          "ingredients": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["name", "epicure_term"],
+              "properties": {
+                "name": { "type": "string" },
+                "epicure_term": { "type": ["string", "null"] }
+              }
+            }
+          }
+        }
+      }
+    },
+    "previous": {
+      "oneOf": [
+        { "type": "null" },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["territories", "subthemes"],
+          "properties": {
+            "territories": { "$ref": "#/$defs/positions" },
+            "subthemes": { "$ref": "#/$defs/positions" }
+          }
+        }
+      ]
+    }
+  },
+  "$defs": {
+    "positions": {
+      "type": "object",
+      "propertyNames": { "pattern": "^[1-9][0-9]*$" },
+      "additionalProperties": { "type": "array", "items": { "type": "number" }, "minItems": 2, "maxItems": 2 }
+    }
+  }
+}

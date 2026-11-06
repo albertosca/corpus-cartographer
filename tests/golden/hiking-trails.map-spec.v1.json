@@ -1,0 +1,157 @@
+{
+  "version": "1",
+  "territories": [
+    {
+      "id": "theme:1",
+      "name": "Mountains",
+      "members": [
+        "recipe:101",
+        "recipe:102",
+        "recipe:103",
+        "recipe:104",
+        "recipe:105",
+        "recipe:106"
+      ],
+      "centroid": [
+        91.054665,
+        -24.898807
+      ]
+    },
+    {
+      "id": "theme:2",
+      "name": "Coast",
+      "members": [
+        "recipe:107",
+        "recipe:108",
+        "recipe:109",
+        "recipe:110"
+      ],
+      "centroid": [
+        -17.927593,
+        74.057389
+      ]
+    },
+    {
+      "id": "theme:3",
+      "name": "Forest",
+      "members": [
+        "recipe:111",
+        "recipe:112",
+        "recipe:113",
+        "recipe:114",
+        "recipe:115"
+      ],
+      "centroid": [
+        -73.127072,
+        -49.158583
+      ]
+    }
+  ],
+  "nodes": [
+    {
+      "id": "recipe:101",
+      "label": "Granite Spine",
+      "x": 56.689251,
+      "y": -31.496196,
+      "territory": "theme:1"
+    },
+    {
+      "id": "recipe:102",
+      "label": "Cloud Saddle",
+      "x": 56.80533,
+      "y": -18.258405,
+      "territory": "theme:1"
+    },
+    {
+      "id": "recipe:103",
+      "label": "Needle Pass",
+      "x": 74.609712,
+      "y": -24.94182,
+      "territory": "theme:1"
+    },
+    {
+      "id": "recipe:104",
+      "label": "Tarn Circuit",
+      "x": 115.381017,
+      "y": -20.439565,
+      "territory": "theme:1"
+    },
+    {
+      "id": "recipe:105",
+      "label": "Moraine Loop",
+      "x": 131.284857,
+      "y": -25.763029,
+      "territory": "theme:1"
+    },
+    {
+      "id": "recipe:106",
+      "label": "Blue Basin",
+      "x": 111.557824,
+      "y": -28.493826,
+      "territory": "theme:1"
+    },
+    {
+      "id": "recipe:107",
+      "label": "Chalk Headland",
+      "x": -58.189185,
+      "y": 74.057389,
+      "territory": "theme:2"
+    },
+    {
+      "id": "recipe:108",
+      "label": "Smugglers Steps",
+      "x": -34.372468,
+      "y": 74.057389,
+      "territory": "theme:2"
+    },
+    {
+      "id": "recipe:109",
+      "label": "Driftwood Mile",
+      "x": -1.482717,
+      "y": 74.057389,
+      "territory": "theme:2"
+    },
+    {
+      "id": "recipe:110",
+      "label": "Salt Flats Walk",
+      "x": 22.334,
+      "y": 74.057389,
+      "territory": "theme:2"
+    },
+    {
+      "id": "recipe:111",
+      "label": "Cathedral Grove",
+      "x": -113.388665,
+      "y": -49.158583,
+      "territory": "theme:3"
+    },
+    {
+      "id": "recipe:112",
+      "label": "Fern Hollow",
+      "x": -89.571948,
+      "y": -49.158583,
+      "territory": "theme:3"
+    },
+    {
+      "id": "recipe:113",
+      "label": "Boardwalk Fen",
+      "x": -56.682197,
+      "y": -49.158583,
+      "territory": "theme:3"
+    },
+    {
+      "id": "recipe:114",
+      "label": "Otter Slough",
+      "x": -32.86548,
+      "y": -49.158583,
+      "territory": "theme:3"
+    },
+    {
+      "id": "recipe:115",
+      "label": "Unmapped Detour",
+      "x": -83.617769,
+      "y": -49.158583,
+      "territory": "theme:3"
+    }
+  ]
+}

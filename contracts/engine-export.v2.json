@@ -1,0 +1,30 @@
+{
+  "schema": "recipes-cartographer/engine-export",
+  "version": 2,
+  "taxonomy_version": 2,
+  "themes": [
+    { "id": 1, "parent_id": null, "name": "Churrasco", "epicure_terms": [] },
+    { "id": 2, "parent_id": null, "name": "Massas", "epicure_terms": ["flour"] },
+    { "id": 11, "parent_id": 1, "name": "Cortes", "epicure_terms": [] },
+    { "id": 12, "parent_id": 1, "name": "Molhos", "epicure_terms": [] },
+    { "id": 21, "parent_id": 2, "name": "Frescas", "epicure_terms": [] },
+    { "id": 22, "parent_id": 2, "name": "Secas", "epicure_terms": [] }
+  ],
+  "recipes": [
+    { "id": 101, "title": "Synthetic 101", "subtheme_id": 11, "status": "assigned", "seal": "complete",
+      "ingredients": [ { "name": "Picanha", "epicure_term": "beef" }, { "name": "Alho", "epicure_term": "garlic" } ] },
+    { "id": 102, "title": "Synthetic 102", "subtheme_id": 12, "status": "assigned", "seal": "absent",
+      "ingredients": [ { "name": "Limão", "epicure_term": "lime" }, { "name": "Alho picado", "epicure_term": "garlic" } ] },
+    { "id": 103, "title": "Synthetic 103", "subtheme_id": 21, "status": "assigned", "seal": "complete",
+      "ingredients": [ { "name": "Farinha", "epicure_term": "flour" }, { "name": "Ovo", "epicure_term": "egg" } ] },
+    { "id": 104, "title": "Synthetic 104", "subtheme_id": 22, "status": "assigned", "seal": "complete",
+      "ingredients": [ { "name": "Tomate", "epicure_term": "tomato" }, { "name": "Alho", "epicure_term": "garlic" } ] },
+    { "id": 105, "title": "Synthetic 105", "subtheme_id": 22, "status": "assigned", "seal": "none", "ingredients": [] },
+    { "id": 106, "title": "Synthetic 106", "subtheme_id": null, "status": "needs_owner", "seal": "complete",
+      "ingredients": [ { "name": "Cebola", "epicure_term": "onion" } ] },
+    { "id": 107, "title": "Synthetic 107", "subtheme_id": null, "status": "unclassified", "seal": "complete",
+      "ingredients": [ { "name": "Sal", "epicure_term": null } ] }
+  ],
+  "previous": { "territories": { "1": [-30.0, 0.0], "2": [30.0, 0.0] }, "subthemes": {} },
+  "rejected_pairs": [[101, 102]]
+}
