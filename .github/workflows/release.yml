@@ -24,8 +24,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: ${{ matrix.target }}
+      # rust-toolchain.toml pins the toolchain cargo really uses, so the target
+      # is added from inside the repository, not through the action's `targets`.
+      - run: rustup target add ${{ matrix.target }}
       - name: Read the crate version
         id: crate
         shell: bash
