@@ -22,7 +22,7 @@ jobs:
             os: macos-latest
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
       # rust-toolchain.toml pins the toolchain cargo really uses, so the target
       # is added from inside the repository, not through the action's `targets`.
@@ -57,7 +57,7 @@ jobs:
         run: |
           reported="$(${{ steps.package.outputs.name }}/corpus-cartographer --version)"
           test "$reported" = "corpus-cartographer ${{ steps.crate.outputs.version }}" || { echo "got: $reported" >&2; exit 1; }
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: ${{ steps.package.outputs.name }}
           path: |
@@ -69,7 +69,7 @@ jobs:
     if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           path: dist
           merge-multiple: true
