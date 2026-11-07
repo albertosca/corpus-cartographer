@@ -90,27 +90,49 @@ impl fmt::Display for ExportError {
 
 impl std::error::Error for ExportError {}
 
-/// Only the fields that say which contract a document follows; unknown
-/// fields are allowed so another version still gets this far.
-#[derive(Deserialize)]
-struct Header {
-    schema: String,
-    version: u32,
+struct Header<'a> {
+    schema: Option<&'a serde_json::Value>,
+    version: Option<&'a serde_json::Value>,
 }
 
+/// Only the fields that say which contract a document follows are read, as
+/// raw JSON (unknown fields are allowed, so another version still gets this
+/// far, and a missing or odd value is named instead of becoming a serde error).
 pub fn parse(text: &str) -> Result<(EngineExport, Format), ExportError> {
-    let header: Header =
+    let root: serde_json::Value =
         serde_json::from_str(text).map_err(|error| ExportError(error.to_string()))?;
-    let (export, format) = match (header.schema.as_str(), header.version) {
-        (SCHEMA, VERSION) => (
+    let header = Header {
+        schema: root.get("schema"),
+        version: root.get("version"),
+    };
+    let schema = header.schema.and_then(serde_json::Value::as_str);
+    let version = header
+        .version
+        .and_then(serde_json::Value::as_u64)
+        .and_then(|number| u32::try_from(number).ok());
+    let (export, format) = match (schema, version) {
+        (Some(SCHEMA), Some(VERSION)) => (
             serde_json::from_str::<EngineExport>(text)
                 .map_err(|error| ExportError(error.to_string()))?,
             Format::V3,
         ),
-        (legacy_v2::SCHEMA, legacy_v2::VERSION) => (legacy_v2::parse(text)?, Format::V2),
-        (schema, version) => {
+        (Some(legacy_v2::SCHEMA), Some(legacy_v2::VERSION)) => {
+            (legacy_v2::parse(text)?, Format::V2)
+        }
+        _ => {
+            let found_schema = header.schema.map_or_else(
+                || "no schema".to_string(),
+                |value| match value.as_str() {
+                    Some(name) => name.to_string(),
+                    None => value.to_string(),
+                },
+            );
+            let found_version = header.version.as_ref().map_or_else(
+                || "without a version".to_string(),
+                |value| format!("version {value}"),
+            );
             return Err(ExportError(format!(
-                "expected {SCHEMA} version {VERSION} or {} version {}, found {schema} version {version}",
+                "expected {SCHEMA} version {VERSION} or {} version {}, found {found_schema} {found_version}",
                 legacy_v2::SCHEMA,
                 legacy_v2::VERSION
             )));
@@ -283,6 +305,35 @@ mod tests {
             "{error}"
         );
         assert!(!error.contains("new_field"), "{error}");
+    }
+
+    // A version that is not a whole number cannot be compared to 3 or 2, but
+    // the refusal must still name the versions the engine reads.
+    #[test]
+    fn a_version_that_is_not_an_integer_names_the_versions_too() {
+        for (replacement, shown) in [
+            (r#""version":"3""#, r#""3""#),
+            (r#""version":3.5"#, "3.5"),
+            (r#""version":null"#, "null"),
+            (r#""version":-1"#, "-1"),
+        ] {
+            let text = export_with(THEMES, "[]").replace(r#""version":3"#, replacement);
+            let error = error_of(&text);
+            assert!(
+                error.contains("version 3 or") && error.contains(&format!("version {shown}")),
+                "{replacement}: {error}"
+            );
+        }
+    }
+
+    #[test]
+    fn a_missing_version_names_the_versions_too() {
+        let text = export_with(THEMES, "[]").replace(r#""version":3,"#, "");
+        let error = error_of(&text);
+        assert!(
+            error.contains("version 3 or") && error.contains("without a version"),
+            "{error}"
+        );
     }
 
     #[test]
