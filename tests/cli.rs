@@ -72,7 +72,7 @@ fn an_invalid_input_fails_without_writing_links() {
 }
 
 #[test]
-fn a_missing_epicure_names_the_file() {
+fn a_missing_embeddings_directory_names_the_file() {
     let out = tempdir().unwrap();
     let result = engine()
         .args([
@@ -157,7 +157,7 @@ fn runs_without_embeddings_when_no_directory_is_given() {
 }
 
 #[test]
-fn the_old_epicure_dir_flag_is_an_alias_of_embeddings_dir() {
+fn the_old_flag_name_is_an_alias_of_embeddings_dir() {
     let embeddings = mini_embeddings_directory();
     let out = tempdir().unwrap();
     let result = engine()
@@ -181,21 +181,21 @@ fn the_old_epicure_dir_flag_is_an_alias_of_embeddings_dir() {
 #[test]
 fn a_corpus_too_big_for_dense_axes_fails_with_the_reason_on_stderr() {
     let directory = tempdir().unwrap();
-    let recipes: Vec<String> = (0..5001)
+    let rows: Vec<String> = (0..5001)
         .map(|index| {
             format!(
-                r#"{{"id":{id},"title":"Item","subtheme_id":11,"status":"assigned","seal":"complete","ingredients":[{{"name":"n","epicure_term":"term-{index}"}}]}}"#,
+                r#"{{"id":{id},"title":"Item","subtheme_id":11,"status":"assigned","badges":[],"terms":[{{"label":"n","term":"term-{index}"}}]}}"#,
                 id = index + 1
             )
         })
         .collect();
-    let themes = r#"[{"id":1,"parent_id":null,"name":"A","epicure_terms":[]},{"id":11,"parent_id":1,"name":"A1","epicure_terms":[]}]"#;
+    let themes = r#"[{"id":1,"parent_id":null,"name":"A","terms":[]},{"id":11,"parent_id":1,"name":"A1","terms":[]}]"#;
     let input = directory.path().join("big.json");
     fs::write(
         &input,
         format!(
-            r#"{{"schema":"recipes-cartographer/engine-export","version":2,"taxonomy_version":1,"themes":{themes},"recipes":[{}],"previous":null,"rejected_pairs":[]}}"#,
-            recipes.join(",")
+            r#"{{"schema":"corpus-cartographer/engine-export","version":3,"taxonomy_version":1,"themes":{themes},"items":[{}],"previous":null,"rejected_pairs":[]}}"#,
+            rows.join(",")
         ),
     )
     .unwrap();

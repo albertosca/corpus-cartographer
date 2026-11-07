@@ -9,30 +9,30 @@ use corpus_cartographer::embeddings::Embeddings;
 use corpus_cartographer::export;
 
 const THEMES: &str = r#"[
-  {"id":1,"parent_id":null,"name":"A","epicure_terms":[]},
-  {"id":2,"parent_id":null,"name":"B","epicure_terms":[]},
-  {"id":11,"parent_id":1,"name":"A1","epicure_terms":[]},
-  {"id":21,"parent_id":2,"name":"B1","epicure_terms":[]}
+  {"id":1,"parent_id":null,"name":"A","terms":[]},
+  {"id":2,"parent_id":null,"name":"B","terms":[]},
+  {"id":11,"parent_id":1,"name":"A1","terms":[]},
+  {"id":21,"parent_id":2,"name":"B1","terms":[]}
 ]"#;
 
 /// An export whose items are `(id, subtheme id, terms)`.
 fn export_of(items: &[(u64, u64, Vec<&str>)]) -> String {
-    let recipes: Vec<String> = items
+    let rows: Vec<String> = items
         .iter()
         .map(|(id, subtheme_id, terms)| {
-            let ingredients: Vec<String> = terms
+            let labelled: Vec<String> = terms
                 .iter()
-                .map(|term| format!(r#"{{"name":"name of {term}","epicure_term":"{term}"}}"#))
+                .map(|term| format!(r#"{{"label":"name of {term}","term":"{term}"}}"#))
                 .collect();
             format!(
-                r#"{{"id":{id},"title":"Item {id}","subtheme_id":{subtheme_id},"status":"assigned","seal":"complete","ingredients":[{}]}}"#,
-                ingredients.join(",")
+                r#"{{"id":{id},"title":"Item {id}","subtheme_id":{subtheme_id},"status":"assigned","badges":[],"terms":[{}]}}"#,
+                labelled.join(",")
             )
         })
         .collect();
     format!(
-        r#"{{"schema":"recipes-cartographer/engine-export","version":2,"taxonomy_version":1,"themes":{THEMES},"recipes":[{}],"previous":null,"rejected_pairs":[]}}"#,
-        recipes.join(",")
+        r#"{{"schema":"corpus-cartographer/engine-export","version":3,"taxonomy_version":1,"themes":{THEMES},"items":[{}],"previous":null,"rejected_pairs":[]}}"#,
+        rows.join(",")
     )
 }
 
@@ -49,7 +49,7 @@ fn an_item_with_no_terms_is_placed_without_a_vector_or_links() {
         (3, 21, vec!["d", "e"]),
         (4, 21, vec![]),
     ]);
-    assert!(output.summary.contains("recipes=4"), "{}", output.summary);
+    assert!(output.summary.contains("items=4"), "{}", output.summary);
     assert!(
         output.summary.contains("with_vector=3"),
         "{}",
@@ -77,7 +77,7 @@ fn items_sharing_every_term_get_real_coordinates_and_link_at_one() {
         assert!(node["x"].is_f64() && node["y"].is_f64(), "{node}");
     }
     // A flavour equal to the corpus mean keeps its raw direction, so
-    // identical items stay linked (cosine 1), as recipes do today.
+    // identical items stay linked (cosine 1), as they did before.
     assert!(output.summary.contains("links=6"), "{}", output.summary);
 }
 
@@ -172,20 +172,20 @@ fn no_link_carries_a_closest_term_because_there_are_no_embeddings() {
 fn a_corpus_too_big_for_dense_axes_is_refused_with_both_numbers() {
     // 5001 distinct terms over 5001 items: 5001 x 5001 cells is over the limit.
     let terms: Vec<String> = (0..5001).map(|index| format!("term-{index}")).collect();
-    let mut recipes = String::new();
+    let mut rows = String::new();
     for (index, term) in terms.iter().enumerate() {
         if index > 0 {
-            recipes.push(',');
+            rows.push(',');
         }
         write!(
-            recipes,
-            r#"{{"id":{id},"title":"Item","subtheme_id":11,"status":"assigned","seal":"complete","ingredients":[{{"name":"n","epicure_term":"{term}"}}]}}"#,
+            rows,
+            r#"{{"id":{id},"title":"Item","subtheme_id":11,"status":"assigned","badges":[],"terms":[{{"label":"n","term":"{term}"}}]}}"#,
             id = index + 1
         )
         .unwrap();
     }
     let text = format!(
-        r#"{{"schema":"recipes-cartographer/engine-export","version":2,"taxonomy_version":1,"themes":{THEMES},"recipes":[{recipes}],"previous":null,"rejected_pairs":[]}}"#
+        r#"{{"schema":"corpus-cartographer/engine-export","version":3,"taxonomy_version":1,"themes":{THEMES},"items":[{rows}],"previous":null,"rejected_pairs":[]}}"#
     );
     let error = corpus_cartographer::run_without_embeddings(&text, &support::golden_options())
         .err()
@@ -283,7 +283,7 @@ fn the_v2_hiking_trails_witness_still_makes_a_valid_map() {
         "hiking-trails.v2.json",
         "engine-export.v2.schema.json",
         "engine-links.v2.schema.json",
-        "recipes",
+        corpus_cartographer::legacy_v2::COUNT_NOUN,
     );
 }
 

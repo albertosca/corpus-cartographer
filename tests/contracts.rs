@@ -23,7 +23,7 @@ pub fn schema_errors(schema_name: &str, instance: &serde_json::Value) -> Vec<Str
 }
 
 #[test]
-fn the_golden_export_matches_its_schema() {
+fn the_v2_golden_export_matches_its_schema() {
     let errors = schema_errors(
         "engine-export.v2.schema.json",
         &read_json("engine-export.v2.json"),
@@ -32,7 +32,7 @@ fn the_golden_export_matches_its_schema() {
 }
 
 #[test]
-fn the_export_schema_rejects_an_unknown_field() {
+fn the_v2_export_schema_rejects_an_unknown_field() {
     let mut export = read_json("engine-export.v2.json");
     export["recipes"][0]["creator_name"] = "someone".into();
     assert_ne!(
@@ -118,7 +118,7 @@ fn an_empty_badge_is_refused_by_the_schema_and_by_the_parser() {
 }
 
 #[test]
-fn the_golden_export_parses_into_the_engine_types() {
+fn the_v2_golden_export_parses_into_the_engine_types() {
     let text = fs::read_to_string(contracts_directory().join("engine-export.v2.json")).unwrap();
     let (export, format) = corpus_cartographer::export::parse(&text).unwrap();
     assert_eq!(format, corpus_cartographer::export::Format::V2);

@@ -37,7 +37,7 @@ The input is `corpus-cartographer/engine-export`, version 3. The schema is `cont
 | `previous` | positions from the last run, so the map keeps its shape |
 | `rejected_pairs` | item pairs that must never be linked |
 
-The output follows the input version. Export v2 (the recipe-era names) is still accepted in this release and is removed in 0.5.0.
+The output follows the input version. Export v2 (the earlier names) is still accepted in this release and is removed in 0.5.0.
 
 ## Works with
 

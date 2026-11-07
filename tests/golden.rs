@@ -56,7 +56,7 @@ fn the_v3_links_document_matches_the_golden() {
 }
 
 #[test]
-fn the_golden_links_only_join_flavoured_assigned_recipes() {
+fn the_golden_links_only_join_flavoured_assigned_items() {
     let document: serde_json::Value = serde_json::from_str(&output().links_json).unwrap();
     let links = document["links"].as_array().unwrap();
     assert_ne!(links, &Vec::<serde_json::Value>::new());
