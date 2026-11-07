@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- A release workflow builds `corpus-cartographer` for Linux x86_64 and macOS (Apple silicon and Intel) when a `v*` tag is pushed, and attaches a tarball and a SHA-256 file per target. The tag must equal the version in `Cargo.toml`. Running it by hand builds and packages without creating a release.
+
 ## 0.4.0
 
 - New repository: `corpus-cartographer`, the generic map engine, started from the `recipes-engine` 0.3.1 code with a clean history.

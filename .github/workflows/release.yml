@@ -1,0 +1,78 @@
+name: Release
+on:
+  push:
+    tags: ["v*"]
+  # A manual run builds and packages only; the publish job needs a tag.
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      fail-fast: true
+      matrix:
+        include:
+          - target: x86_64-unknown-linux-gnu
+            os: ubuntu-latest
+          - target: aarch64-apple-darwin
+            os: macos-14
+          - target: x86_64-apple-darwin
+            os: macos-14
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+      - name: Read the crate version
+        id: crate
+        shell: bash
+        run: echo "version=$(cargo metadata --no-deps --format-version 1 | python3 -c 'import json,sys; print(json.load(sys.stdin)["packages"][0]["version"])')" >> "$GITHUB_OUTPUT"
+      - name: The tag must name the crate version
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: bash
+        run: |
+          if [ "${GITHUB_REF_NAME}" != "v${{ steps.crate.outputs.version }}" ]; then
+            echo "tag ${GITHUB_REF_NAME} does not match Cargo.toml version ${{ steps.crate.outputs.version }}" >&2
+            exit 1
+          fi
+      - run: cargo test --locked
+      - run: cargo build --release --locked --target ${{ matrix.target }}
+      - name: Package
+        id: package
+        shell: bash
+        run: |
+          name="corpus-cartographer-v${{ steps.crate.outputs.version }}-${{ matrix.target }}"
+          mkdir "$name"
+          cp "target/${{ matrix.target }}/release/corpus-cartographer" LICENSE "$name/"
+          tar -czf "$name.tar.gz" "$name"
+          shasum -a 256 "$name.tar.gz" > "$name.tar.gz.sha256"
+          echo "name=$name" >> "$GITHUB_OUTPUT"
+      - name: The packaged binary reports the crate version
+        if: matrix.target != 'x86_64-apple-darwin'
+        shell: bash
+        run: |
+          reported="$(${{ steps.package.outputs.name }}/corpus-cartographer --version)"
+          test "$reported" = "corpus-cartographer ${{ steps.crate.outputs.version }}" || { echo "got: $reported" >&2; exit 1; }
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.package.outputs.name }}
+          path: |
+            ${{ steps.package.outputs.name }}.tar.gz
+            ${{ steps.package.outputs.name }}.tar.gz.sha256
+
+  publish:
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+      - name: Create the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "${GITHUB_REF_NAME}" dist/* --repo "${GITHUB_REPOSITORY}" --title "${GITHUB_REF_NAME}" --generate-notes
