@@ -4,6 +4,7 @@
 
 - A document whose `version` is missing, not a whole number or out of range is now refused naming the versions the engine reads (`version 3 or ... version 2`), instead of a serde message about a field.
 - A release workflow builds `corpus-cartographer` for Linux x86_64 and macOS (Apple silicon and Intel) when a `v*` tag is pushed, and attaches a tarball and a SHA-256 file per target. The tag must equal the version in `Cargo.toml`. Running it by hand builds and packages without creating a release.
+- A `gem.yml` workflow runs the `corpus_atlas` gem's own suite against the engine built from the commit and its contracts (needs the `GEM_READ_TOKEN` secret and fails without it), so a change the gem cannot read fails here.
 
 ## 0.4.0
 
