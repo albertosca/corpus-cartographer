@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- The `gem.yml` workflow is removed: the engine is tested on its own, and the `corpus_atlas` gem checks the engine it pins from its own repository. The `GEM_READ_TOKEN` secret is no longer needed.
+
 ## 0.4.1
 
 - The minimum Rust version is 1.88, not 1.85: `sha2` 0.11 needs 1.88, so the engine never built on the version `Cargo.toml` declared. CI now runs the suite on 1.88, so the number is measured.
