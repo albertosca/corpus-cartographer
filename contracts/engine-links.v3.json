@@ -1,7 +1,7 @@
 {
   "schema": "corpus-cartographer/engine-links",
   "version": 3,
-  "engine_version": "0.4.0",
+  "engine_version": "0.4.1",
   "input_sha256": "d6b4a5a61a941d48b3a96eb7f9f7596026e8a33573dd564832d25217bb963483",
   "links": [
     {

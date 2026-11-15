@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.4.1
 
 - The minimum Rust version is 1.88, not 1.85: `sha2` 0.11 needs 1.88, so the engine never built on the version `Cargo.toml` declared. CI now runs the suite on 1.88, so the number is measured.
 - CI enforces line coverage of `src/` with `cargo llvm-cov` (floor 97%, measured 97.76%) and checks every dependency, dev ones included, with `cargo deny` (RustSec advisories, licences, sources; rules in `deny.toml`).

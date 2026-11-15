@@ -1,7 +1,7 @@
 {
   "schema": "recipes-cartographer/engine-links",
   "version": 2,
-  "engine_version": "0.4.0",
+  "engine_version": "0.4.1",
   "input_sha256": "efff690a51a57515a52d1549137f3a70a4653806a572ec6d5cc0cac808d3dcc6",
   "links": [
     {
