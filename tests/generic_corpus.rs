@@ -330,3 +330,53 @@ fn the_hiking_trails_map_matches_its_golden() {
         "rerun with UPDATE_GOLDEN=1 and review the diff"
     );
 }
+
+fn warnings_with(items: &[(u64, u64, Vec<&str>)]) -> serde_json::Value {
+    let output = corpus_cartographer::run(
+        &export_of(items),
+        &support::mini_embeddings(),
+        &support::golden_options(),
+    )
+    .unwrap();
+    let links: serde_json::Value = serde_json::from_str(&output.links_json).unwrap();
+    links["warnings"].clone()
+}
+
+#[test]
+fn terms_missing_from_the_embeddings_are_counted_once_each_in_a_warning() {
+    let warnings = warnings_with(&[
+        (1, 11, vec!["beef", "saffron"]),
+        (2, 11, vec!["egg", "saffron", "sumac"]),
+        (3, 21, vec!["lime", "onion"]),
+    ]);
+
+    let unknown: Vec<&serde_json::Value> = warnings
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|warning| warning["kind"] == "unknown_terms")
+        .collect();
+    assert_eq!(
+        unknown,
+        [&serde_json::json!({"kind": "unknown_terms", "count": 2})],
+        "{warnings}"
+    );
+}
+
+#[test]
+fn a_corpus_whose_terms_are_all_known_gets_no_unknown_terms_warning() {
+    let warnings = warnings_with(&[
+        (1, 11, vec!["beef", "garlic"]),
+        (2, 11, vec!["egg", "flour"]),
+        (3, 21, vec!["lime", "onion"]),
+    ]);
+
+    assert!(
+        !warnings
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|warning| warning["kind"] == "unknown_terms"),
+        "{warnings}"
+    );
+}

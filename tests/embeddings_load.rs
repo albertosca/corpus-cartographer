@@ -1,6 +1,7 @@
 mod support;
 
 use corpus_cartographer::embeddings::Embeddings;
+use safetensors::{Dtype, tensor::TensorView};
 use tempfile::tempdir;
 
 #[test]
@@ -79,4 +80,96 @@ fn neighbors_exclude_the_query_and_break_ties_by_index() {
     let names: Vec<&str> = neighbors.iter().map(|(term, _)| term.as_str()).collect();
     assert_eq!(names, ["first", "second", "far"]);
     assert!(embeddings.neighbors("unknown", 3).is_none());
+}
+
+fn write_tensor(
+    directory: &std::path::Path,
+    vocabulary: &str,
+    dtype: Dtype,
+    shape: Vec<usize>,
+    bytes: &[u8],
+) {
+    std::fs::write(directory.join("vocab.json"), vocabulary).unwrap();
+    let view = TensorView::new(dtype, shape, bytes).unwrap();
+    let encoded = safetensors::serialize([("embeddings", view)], None).unwrap();
+    std::fs::write(directory.join("embeddings.safetensors"), encoded).unwrap();
+}
+
+fn load_error(directory: &std::path::Path) -> String {
+    Embeddings::load(directory).err().unwrap().to_string()
+}
+
+#[test]
+fn a_vocabulary_index_past_the_last_term_is_refused() {
+    let directory = tempdir().unwrap();
+    write_tensor(
+        directory.path(),
+        r#"{"salt": 5}"#,
+        Dtype::F32,
+        vec![1, 1],
+        &1.0_f32.to_le_bytes(),
+    );
+
+    let error = load_error(directory.path());
+
+    assert!(error.contains("index 5 is out of range"), "{error}");
+}
+
+#[test]
+fn two_terms_on_one_vocabulary_index_are_refused() {
+    let directory = tempdir().unwrap();
+    let bytes: Vec<u8> = [1.0_f32, 2.0]
+        .iter()
+        .flat_map(|value| value.to_le_bytes())
+        .collect();
+    write_tensor(
+        directory.path(),
+        r#"{"salt": 0, "pepper": 0}"#,
+        Dtype::F32,
+        vec![2, 1],
+        &bytes,
+    );
+
+    let error = load_error(directory.path());
+
+    assert!(error.contains("index 0 is used twice"), "{error}");
+}
+
+#[test]
+fn weights_that_are_not_f32_are_refused() {
+    let directory = tempdir().unwrap();
+    write_tensor(
+        directory.path(),
+        r#"{"salt": 0}"#,
+        Dtype::F64,
+        vec![1, 1],
+        &1.0_f64.to_le_bytes(),
+    );
+
+    let error = load_error(directory.path());
+
+    assert!(error.contains("expected f32 weights, found F64"), "{error}");
+}
+
+#[test]
+fn a_tensor_that_is_not_two_dimensional_is_refused() {
+    let directory = tempdir().unwrap();
+    let bytes: Vec<u8> = [1.0_f32, 2.0]
+        .iter()
+        .flat_map(|value| value.to_le_bytes())
+        .collect();
+    write_tensor(
+        directory.path(),
+        r#"{"salt": 0, "pepper": 1}"#,
+        Dtype::F32,
+        vec![2],
+        &bytes,
+    );
+
+    let error = load_error(directory.path());
+
+    assert!(
+        error.contains("expected a 2-d tensor, found shape [2]"),
+        "{error}"
+    );
 }
