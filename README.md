@@ -2,6 +2,7 @@
 
 [![CI](https://github.com/albertosca/corpus-cartographer/actions/workflows/ci.yml/badge.svg)](https://github.com/albertosca/corpus-cartographer/actions/workflows/ci.yml)
 [![Lint](https://github.com/albertosca/corpus-cartographer/actions/workflows/lint.yml/badge.svg)](https://github.com/albertosca/corpus-cartographer/actions/workflows/lint.yml)
+[![Coverage](https://img.shields.io/badge/coverage-97.76%25-brightgreen)](https://github.com/albertosca/corpus-cartographer/actions/workflows/ci.yml)
 
 # corpus-cartographer
 
@@ -42,6 +43,10 @@ The output follows the input version. Export v2 (the earlier names) is still acc
 ## Works with
 
 It pairs with the `corpus_atlas` Rails engine, which produces the export and imports the links, and with the `corpus-map` viewer, which draws the map. Each also works alone.
+
+## Development
+
+Rust 1.88 or newer. CI runs `cargo test`, `cargo fmt --check`, `cargo clippy` with the pedantic group, `cargo deny check` (advisories, licences, sources), the suite on Rust 1.88, and `cargo llvm-cov` with a floor of 97% of lines. The coverage badge shows the measured number and is updated by hand when it changes.
 
 ## Licence
 

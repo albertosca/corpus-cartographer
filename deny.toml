@@ -1,0 +1,33 @@
+# cargo-deny: run in CI by the Lint workflow (`cargo deny check`).
+# Dev-dependencies are checked too: they run in CI with its secrets.
+
+[advisories]
+# Every RustSec advisory fails the check, including unmaintained and yanked
+# crates; an accepted one goes in `ignore` with its id and the reason.
+unmaintained = "all"
+yanked = "deny"
+ignore = []
+
+[licenses]
+# Licences found in the dependency graph on 2026-11-15, all compatible with
+# shipping this MIT binary. A new licence fails the check until it is read
+# and added here on purpose.
+allow = [
+    "Apache-2.0",
+    "Apache-2.0 WITH LLVM-exception",
+    "MIT",
+    "Unicode-3.0",
+    "Unlicense",
+    "Zlib",
+]
+confidence-threshold = 0.9
+
+[bans]
+# Two versions of one crate are reported, not refused: they come from
+# upstream and are not ours to fix.
+multiple-versions = "warn"
+wildcards = "deny"
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"
