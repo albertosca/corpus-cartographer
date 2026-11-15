@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/albertosca/corpus-cartographer/actions/workflows/ci.yml/badge.svg)](https://github.com/albertosca/corpus-cartographer/actions/workflows/ci.yml)
 [![Lint](https://github.com/albertosca/corpus-cartographer/actions/workflows/lint.yml/badge.svg)](https://github.com/albertosca/corpus-cartographer/actions/workflows/lint.yml)
-[![Coverage](https://img.shields.io/badge/coverage-97.76%25-brightgreen)](https://github.com/albertosca/corpus-cartographer/actions/workflows/ci.yml)
+[![Coverage](https://img.shields.io/badge/coverage-98.78%25-brightgreen)](https://github.com/albertosca/corpus-cartographer/actions/workflows/ci.yml)
 
 # corpus-cartographer
 
@@ -46,7 +46,7 @@ Combina com o motor Rails `corpus_atlas`, que produz o export e importa as liga�
 
 ## Desenvolvimento
 
-Rust 1.88 ou mais novo. O CI roda `cargo test`, `cargo fmt --check`, `cargo clippy` com o grupo pedantic, `cargo deny check` (avisos de segurança, licenças, origens), a suíte no Rust 1.88 e `cargo llvm-cov` com piso de 97% das linhas. O badge de coverage mostra o número medido e é atualizado à mão quando ele muda.
+Rust 1.88 ou mais novo. O CI roda `cargo test`, `cargo fmt --check`, `cargo clippy` com o grupo pedantic, `cargo deny check` (avisos de segurança, licenças, origens), a suíte no Rust 1.88 e `cargo llvm-cov` com piso de 98% das linhas. O badge de coverage mostra o número medido e é atualizado à mão quando ele muda.
 
 ## Licença
 

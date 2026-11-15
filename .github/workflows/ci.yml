@@ -21,7 +21,7 @@ jobs:
       - uses: taiki-e/install-action@v2
         with:
           tool: cargo-llvm-cov@0.9.1
-      - run: cargo llvm-cov --locked --summary-only --fail-under-lines 97
+      - run: cargo llvm-cov --locked --summary-only --fail-under-lines 98
   # The oldest Rust the engine builds and passes its suite on: the
   # `rust-version` in Cargo.toml, so that number is measured, not declared.
   msrv:
