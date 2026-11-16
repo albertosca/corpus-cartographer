@@ -4,7 +4,9 @@
 
 - The `gem.yml` workflow is removed: the engine is tested on its own, and the `corpus_atlas` gem checks the engine it pins from its own repository. The `GEM_READ_TOKEN` secret is no longer needed.
 - `scripts/build_embeddings.py` builds an embeddings directory from an export with a Model2Vec model (a null term is skipped, and an export with no terms is refused). The module comment in `src/embeddings.rs` describes the format instead of naming a model that does not exist.
-- Both READMEs are rewritten: a quick start with the real output, a complete minimal export, the options with their defaults, how the vectors, layout and stability work, measured sizes, warnings and errors, and a contributor section with the CI commands, a module map, the contract-change steps and the release steps.
+- Both READMEs are rewritten as a short front door: install, a GIF of the trails example drawn by `corpus-map`, a quick start with the real output, and links to the details. The details move to `docs/usage.md` (your own data, options, embeddings, output, warnings and errors, contract) and `docs/how-it-works.md` (why the engine exists, the design and its trade-offs, measured sizes, what the tests guarantee).
+- `CONTRIBUTING.md` holds the CI commands, a module map, the contract-change steps and the release steps, and says contributions are accepted under the MIT licence. A pull request template and a bug report template are added.
+- The test that keeps the first application's vocabulary out of the engine now also reads `docs/`, both READMEs and `CONTRIBUTING.md`.
 - `rust-toolchain.toml` no longer says Dependabot bumps it, since no Dependabot config exists; module comments in `src/output.rs` and `src/warning.rs` no longer name the host application.
 
 ## 0.4.1

@@ -1,5 +1,5 @@
-//! The engine's own code, its v3 documents, its tests and its READMEs carry
-//! no words of the first host application. The words may live only in the
+//! The engine's own code, its v3 documents, its tests, its READMEs, its
+//! docs and CONTRIBUTING.md carry no words of the first host application. The words may live only in the
 //! v2 reader and in the tests of that reader. A search that finds nothing is
 //! only believed after it finds something known.
 use std::fs;
@@ -46,10 +46,10 @@ fn offending(directory: &Path, skip: &[&str]) -> Vec<String> {
 
 #[test]
 fn the_search_finds_a_known_hit_first() {
-    let src = Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
+    let source_directory = Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
     assert_eq!(
-        offending(&src, &[]),
-        vec![src.join("legacy_v2.rs").display().to_string()]
+        offending(&source_directory, &[]),
+        vec![source_directory.join("legacy_v2.rs").display().to_string()]
     );
 }
 
@@ -89,8 +89,13 @@ fn nothing_else_in_the_engine_uses_the_words() {
         Vec::<String>::new(),
         "tests"
     );
-    for readme in ["README.md", "README.pt.md"] {
-        let text = fs::read_to_string(root.join(readme)).unwrap();
-        assert!(!mentions_a_word(&text), "{readme}");
+    assert_eq!(
+        offending(&root.join("docs"), &["superpowers"]),
+        Vec::<String>::new(),
+        "docs"
+    );
+    for document in ["README.md", "README.pt.md", "CONTRIBUTING.md"] {
+        let text = fs::read_to_string(root.join(document)).unwrap();
+        assert!(!mentions_a_word(&text), "{document}");
     }
 }
