@@ -40,7 +40,7 @@ pub fn mini_embeddings() -> Embeddings {
     Embeddings::from_rows(terms, values, 4)
 }
 
-/// Writes vocab.json and embeddings.safetensors the way embeddings-core ships them.
+/// Writes vocab.json and embeddings.safetensors the way an embeddings directory holds them.
 pub fn write_embeddings(directory: &Path, terms: &[&str], rows: &[&[f32]]) {
     let vocabulary: BTreeMap<&str, usize> = terms
         .iter()

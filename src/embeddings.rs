@@ -1,6 +1,6 @@
-//! Reads Kaikaku/embeddings-core the way its Python loader does: one f32 tensor
-//! named "embeddings" whose rows follow vocab.json, each row divided by
-//! max(norm, 1e-9) so cosine similarity is a dot product.
+//! Reads an embeddings directory: vocab.json maps each term to a row of the
+//! one f32 tensor named "embeddings" in embeddings.safetensors, and each row
+//! is divided by max(norm, 1e-9) so cosine similarity is a dot product.
 
 use std::collections::HashMap;
 use std::fmt;

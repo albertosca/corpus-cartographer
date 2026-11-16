@@ -3,6 +3,7 @@
 ## Unreleased
 
 - The `gem.yml` workflow is removed: the engine is tested on its own, and the `corpus_atlas` gem checks the engine it pins from its own repository. The `GEM_READ_TOKEN` secret is no longer needed.
+- Both READMEs show how to build an embeddings directory from an export with a Model2Vec model, and the module comment in `src/embeddings.rs` describes the format instead of naming a model that does not exist.
 
 ## 0.4.1
 
