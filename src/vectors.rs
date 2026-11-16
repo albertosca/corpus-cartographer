@@ -1,4 +1,4 @@
-//! A item's flavour is the weighted mean of its distinct Embeddings terms'
+//! An item's flavour is the weighted mean of its distinct Embeddings terms'
 //! unit vectors, re-normalized, minus the corpus mean: a term weighs more
 //! the fewer items use it, and what every item shares counts for nothing.
 //! A group's flavour is the mean direction of its items' flavours. Terms

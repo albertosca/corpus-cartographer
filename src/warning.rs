@@ -1,5 +1,5 @@
-//! What the engine tells the owner about a run. Rails turns each kind into
-//! a sentence in Portuguese; the engine only names the kind and the theme.
+//! What the engine tells the owner about a run. The engine only names the
+//! kind and the theme; the host application turns each kind into a sentence.
 
 use serde::Serialize;
 

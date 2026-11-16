@@ -1,5 +1,6 @@
-//! The three documents the engine writes: links.json for Rails, the v1 map
-//! spec today's corpus-map reads, and the v2 proposal with nesting and edges.
+//! The three documents the engine writes: links.json for the host
+//! application, the v1 map spec corpus-map reads, and the nested map spec
+//! with territories inside territories and edges.
 
 use std::collections::BTreeMap;
 

@@ -1,6 +1,6 @@
 # One toolchain for the engine, locally and in CI, so a new clippy lint on
 # the floating stable channel cannot fail CI without a change here.
-# Dependabot (rust-toolchain ecosystem) proposes each new version as a PR.
+# Raise it by hand, in its own commit, when a new stable release is out.
 [toolchain]
 channel = "1.99.1"
 components = ["rustfmt", "clippy"]
