@@ -74,8 +74,6 @@ Cada ligação em `trails-map/links.json` diz o quanto dois itens se parecem (si
 
 O mapa em si é desenhado pelo [`corpus-map`](https://github.com/albertosca/corpus-map#usage), um componente React: passe `trails-map/map-spec.nested.json` como o `spec` dele. A [demo ao vivo](https://albertosca.github.io/corpus-map/) mostra um mapa sem instalar nada.
 
-![O exemplo das trilhas desenhado pelo corpus-map: três territórios, depois um zoom em Mountains até as trilhas](docs/trails-map.gif)
-
 ```
 export.json ──▶ corpus-cartographer ──▶ links.json            links, positions, warnings
 (+ embeddings,                       ├─▶ map-spec.v1.json      ──▶ corpus-map
@@ -103,7 +101,6 @@ A documentação detalhada está em inglês:
 ## Funciona com
 
 - O [`corpus-map`](https://github.com/albertosca/corpus-map) desenha os map specs.
-- O `corpus_atlas`, para aplicações Rails, monta o export a partir do banco da aplicação e grava as ligações de volta.
 
 Qualquer programa que escreva o JSON funciona igual, e cada peça também funciona sozinha.
 

@@ -3,9 +3,9 @@
 ## Unreleased
 
 - The layout gives each sub-theme a disk whose area grows with its count of items that have a vector, and pushes sibling disks apart until none overlap, starting them packed so no empty band is left between them. Items fill their disk evenly, each keeping its direction from the centre and its rank by distance, so a dense core no longer leaves the rim empty. Before, every level got 35% of the smallest gap between two siblings, so one close pair squeezed the whole map: on the arXiv run, 600 papers sat within a radius of 1.2 on a map 100 wide. Links are unchanged; positions change, and so do the goldens.
-- The `gem.yml` workflow is removed: the engine is tested on its own, and the `corpus_atlas` gem checks the engine it pins from its own repository. The `GEM_READ_TOKEN` secret is no longer needed.
+- The `gem.yml` workflow is removed: the engine is tested on its own, and the gem checks the engine it pins from its own repository. The `GEM_READ_TOKEN` secret is no longer needed.
 - `scripts/build_embeddings.py` builds an embeddings directory from an export with a Model2Vec model (a null term is skipped, and an export with no terms is refused). The module comment in `src/embeddings.rs` describes the format instead of naming a model that does not exist.
-- Both READMEs are rewritten as a short front door: install, a GIF of the trails example drawn by `corpus-map`, a quick start with the real output, and links to the details. The details move to `docs/usage.md` (your own data, options, embeddings, output, warnings and errors, contract) and `docs/how-it-works.md` (why the engine exists, the design and its trade-offs, measured sizes, what the tests guarantee).
+- Both READMEs are rewritten as a short front door: install, a GIF of a map drawn by `corpus-map`, a quick start with the real output, and links to the details. The details move to `docs/usage.md` (your own data, options, embeddings, output, warnings and errors, contract) and `docs/how-it-works.md` (why the engine exists, the design and its trade-offs, measured sizes, what the tests guarantee).
 - `CONTRIBUTING.md` holds the CI commands, a module map, the contract-change steps and the release steps, and says contributions are accepted under the MIT licence. A pull request template and a bug report template are added.
 - The test that keeps the first application's vocabulary out of the engine now also reads `docs/`, both READMEs and `CONTRIBUTING.md`.
 - A real-corpus example: `scripts/build_arxiv_export.py` builds an export from 8,000 arXiv papers (terms from the titles), and `docs/usage.md` shows the run (9,881 links, 120 s, 171 MB) and its limits, with a GIF of the map.
@@ -17,7 +17,7 @@
 - CI enforces line coverage of `src/` with `cargo llvm-cov` (floor 97%, measured 97.76%) and checks every dependency, dev ones included, with `cargo deny` (RustSec advisories, licences, sources; rules in `deny.toml`).
 - A document whose `version` is missing, not a whole number or out of range is now refused naming the versions the engine reads (`version 3 or ... version 2`), instead of a serde message about a field.
 - A release workflow builds `corpus-cartographer` for Linux x86_64 and macOS (Apple silicon and Intel) when a `v*` tag is pushed, and attaches a tarball and a SHA-256 file per target. The tag must equal the version in `Cargo.toml`. Running it by hand builds and packages without creating a release.
-- A `gem.yml` workflow runs the `corpus_atlas` gem's own suite against the engine built from the commit and its contracts (needs the `GEM_READ_TOKEN` secret and fails without it), so a change the gem cannot read fails here.
+- A `gem.yml` workflow runs a consumer gem's own suite against the engine built from the commit and its contracts (needs the `GEM_READ_TOKEN` secret and fails without it), so a change the gem cannot read fails here.
 
 ## 0.4.0
 

@@ -74,8 +74,6 @@ Each link in `trails-map/links.json` says how alike two items are (cosine simila
 
 The map itself is drawn by [`corpus-map`](https://github.com/albertosca/corpus-map#usage), a React component: give it `trails-map/map-spec.nested.json` as its `spec`. The [live demo](https://albertosca.github.io/corpus-map/) shows one without installing anything.
 
-![The hiking-trails example drawn by corpus-map: three territories, then a zoom into Mountains down to single trails](docs/trails-map.gif)
-
 ```
 export.json ──▶ corpus-cartographer ──▶ links.json            links, positions, warnings
 (+ embeddings,                       ├─▶ map-spec.v1.json      ──▶ corpus-map
@@ -101,7 +99,6 @@ export.json ──▶ corpus-cartographer ──▶ links.json            links,
 ## Works with
 
 - [`corpus-map`](https://github.com/albertosca/corpus-map) draws the map specs.
-- `corpus_atlas`, for Rails apps, builds the export from the app's database and saves the links back.
 
 Any program that writes the JSON works just as well, and each piece also works alone.
 
