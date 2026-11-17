@@ -105,6 +105,8 @@ items=8000 placed=8000 waiting=0 with_vector=7999 links=9881 warnings=0
 
 The run took 120 s and 171 MB on an Apple M1, and found 9,881 links, 4,284 of them between different themes. "Diffusion Models and Concept Formation" links to "Concept-Level Risk and Calibration for Governance in Diffusion Foundation Models" through `concept`, `diffusion` and `models`.
 
+![The arXiv run drawn by corpus-map: the five families, a zoom into LLM agents & society down to single papers, then one paper with its related papers and shared words](arxiv-map.gif)
+
 Titles are short, so the result has limits. 3,071 papers have no link at the default floor, some links rest on one rare shared word, and 1,530 links rest on the embeddings alone, with no shared term. The published sample carries titles only, so terms from the abstracts were not tried.
 
 arXiv's metadata is available under CC0 1.0. Thank you to arXiv for use of its open access interoperability.

@@ -8,7 +8,7 @@
 - Both READMEs are rewritten as a short front door: install, a GIF of the trails example drawn by `corpus-map`, a quick start with the real output, and links to the details. The details move to `docs/usage.md` (your own data, options, embeddings, output, warnings and errors, contract) and `docs/how-it-works.md` (why the engine exists, the design and its trade-offs, measured sizes, what the tests guarantee).
 - `CONTRIBUTING.md` holds the CI commands, a module map, the contract-change steps and the release steps, and says contributions are accepted under the MIT licence. A pull request template and a bug report template are added.
 - The test that keeps the first application's vocabulary out of the engine now also reads `docs/`, both READMEs and `CONTRIBUTING.md`.
-- A real-corpus example: `scripts/build_arxiv_export.py` builds an export from 8,000 arXiv papers (terms from the titles), and `docs/usage.md` shows the run (9,881 links, 120 s, 171 MB) and its limits.
+- A real-corpus example: `scripts/build_arxiv_export.py` builds an export from 8,000 arXiv papers (terms from the titles), and `docs/usage.md` shows the run (9,881 links, 120 s, 171 MB) and its limits, with a GIF of the map.
 - `rust-toolchain.toml` no longer says Dependabot bumps it, since no Dependabot config exists; module comments in `src/output.rs` and `src/warning.rs` no longer name the host application.
 
 ## 0.4.1
