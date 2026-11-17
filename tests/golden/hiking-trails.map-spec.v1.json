@@ -13,8 +13,8 @@
         "item:106"
       ],
       "centroid": [
-        44.146869,
-        -12.071917
+        20.684904,
+        -7.147242
       ]
     },
     {
@@ -27,8 +27,8 @@
         "item:110"
       ],
       "centroid": [
-        -8.691999,
-        35.905924
+        -5.417026,
+        18.675138
       ]
     },
     {
@@ -42,8 +42,8 @@
         "item:115"
       ],
       "centroid": [
-        -35.45487,
-        -23.834007
+        -15.267878,
+        -11.527897
       ]
     }
   ],
@@ -51,106 +51,106 @@
     {
       "id": "item:101",
       "label": "Granite Spine",
-      "x": 24.465251,
-      "y": -16.869813,
+      "x": 7.207103,
+      "y": -11.673458,
       "territory": "theme:1"
     },
     {
       "id": "item:102",
       "label": "Cloud Saddle",
-      "x": 24.549668,
-      "y": -7.242741,
+      "x": 8.98439,
+      "y": -4.50347,
       "territory": "theme:1"
     },
     {
       "id": "item:103",
       "label": "Needle Pass",
-      "x": 37.497756,
-      "y": -12.103198,
+      "x": 19.237472,
+      "y": -7.175797,
       "territory": "theme:1"
     },
     {
       "id": "item:104",
       "label": "Tarn Circuit",
-      "x": 56.527664,
-      "y": -8.828971,
+      "x": 27.668425,
+      "y": -4.523272,
       "territory": "theme:1"
     },
     {
       "id": "item:105",
       "label": "Moraine Loop",
-      "x": 68.093598,
-      "y": -12.700416,
+      "x": 37.922826,
+      "y": -7.72098,
       "territory": "theme:1"
     },
     {
       "id": "item:106",
       "label": "Blue Basin",
-      "x": 53.747278,
-      "y": -14.686365,
+      "x": 24.470329,
+      "y": -9.697002,
       "territory": "theme:1"
     },
     {
       "id": "item:107",
       "label": "Chalk Headland",
-      "x": -28.263067,
-      "y": 35.905924,
+      "x": -18.053779,
+      "y": 18.675138,
       "territory": "theme:2"
     },
     {
       "id": "item:108",
       "label": "Smugglers Steps",
-      "x": -14.120932,
-      "y": 35.905924,
+      "x": -8.053779,
+      "y": 18.675138,
       "territory": "theme:2"
     },
     {
       "id": "item:109",
       "label": "Driftwood Mile",
-      "x": -3.263067,
-      "y": 35.905924,
+      "x": -2.780273,
+      "y": 18.675138,
       "territory": "theme:2"
     },
     {
       "id": "item:110",
       "label": "Salt Flats Walk",
-      "x": 10.879068,
-      "y": 35.905924,
+      "x": 7.219727,
+      "y": 18.675138,
       "territory": "theme:2"
     },
     {
       "id": "item:111",
       "label": "Cathedral Grove",
-      "x": -53.394153,
-      "y": -23.834007,
+      "x": -26.750785,
+      "y": -11.527897,
       "territory": "theme:3"
     },
     {
       "id": "item:112",
       "label": "Fern Hollow",
-      "x": -42.515587,
-      "y": -23.834007,
+      "x": -19.058477,
+      "y": -11.527897,
       "territory": "theme:3"
     },
     {
       "id": "item:113",
       "label": "Boardwalk Fen",
-      "x": -30.025938,
-      "y": -23.834007,
+      "x": -12.631125,
+      "y": -11.527897,
       "territory": "theme:3"
     },
     {
       "id": "item:114",
       "label": "Otter Slough",
-      "x": -15.883802,
-      "y": -23.834007,
+      "x": -2.631125,
+      "y": -11.527897,
       "territory": "theme:3"
     },
     {
       "id": "item:115",
       "label": "Unmapped Detour",
-      "x": -40.883802,
-      "y": -23.834007,
+      "x": -17.426692,
+      "y": -11.527897,
       "territory": "theme:3"
     }
   ]

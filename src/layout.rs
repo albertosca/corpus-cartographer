@@ -19,8 +19,10 @@ use crate::warning::Warning;
 /// its area grows with its size and every item gets about the same room.
 const ITEM_SPACING: f64 = 5.0;
 /// The space kept between two sibling disks, as a fraction of their radii.
-const SIBLING_GAP_FRACTION: f64 = 0.25;
-const SEPARATION_SWEEPS: usize = 200;
+const SIBLING_GAP_FRACTION: f64 = 0.08;
+const SEPARATION_SWEEPS: usize = 2000;
+/// The angle between consecutive items with no direction of their own.
+const GOLDEN_ANGLE: f64 = 2.399_963_229_728_653;
 const INNER_RING_FRACTION: f64 = 0.3;
 const ROW_GAP: f64 = 20.0;
 const ROW_STEP: f64 = ITEM_SPACING;
@@ -360,20 +362,21 @@ fn place_siblings(
         })
         .collect();
     let mut points = classical_mds(&distances);
-    let target = match fit {
-        Fit::Radius { radius, .. } => *radius,
+    match fit {
+        Fit::Radius { radius, .. } => spread_evenly(&mut points, *radius),
+        // Start packed tighter than the disks allow, so that `separate` opens
+        // only the gaps the disks need and no empty space is left between them.
         Fit::Disks(radii) => {
-            let squares: f64 = flavoured
+            let largest = flavoured
                 .iter()
-                .map(|sibling| radii[&sibling.id].powi(2))
-                .sum();
-            squares.sqrt() * (1.0 + SIBLING_GAP_FRACTION)
-        }
-    };
-    let farthest = points.iter().map(|point| norm(*point)).fold(0.0, f64::max);
-    if farthest > 0.0 {
-        for point in &mut points {
-            *point = [point[0] * target / farthest, point[1] * target / farthest];
+                .map(|sibling| radii[&sibling.id])
+                .fold(0.0, f64::max);
+            let farthest = points.iter().map(|point| norm(*point)).fold(0.0, f64::max);
+            if farthest > 0.0 {
+                for point in &mut points {
+                    *point = [point[0] * largest / farthest, point[1] * largest / farthest];
+                }
+            }
         }
     }
     if let Some(previous) = previous {
@@ -420,6 +423,51 @@ fn place_siblings(
         separate(&mut placed, radii);
     }
     placed
+}
+
+/// Fills a disk of `radius` evenly: each point keeps its direction, and its
+/// distance from the centre becomes its rank by distance, so the closest
+/// stays closest and a dense core no longer leaves the rim empty. Equal
+/// distances share a rank, and a point at the centre gets a direction from
+/// its rank.
+fn spread_evenly(points: &mut [[f64; 2]], radius: f64) {
+    let count = points.len();
+    if count < 2 {
+        return;
+    }
+    let mut order: Vec<usize> = (0..count).collect();
+    order.sort_by(|left, right| {
+        norm(points[*left])
+            .total_cmp(&norm(points[*right]))
+            .then(left.cmp(right))
+    });
+    let mut ranks = vec![0.0; count];
+    let mut start = 0;
+    while start < count {
+        let mut end = start + 1;
+        while end < count
+            && (norm(points[order[end]]) - norm(points[order[start]])).abs()
+                <= 1e-12 * (1.0 + norm(points[order[start]]))
+        {
+            end += 1;
+        }
+        let shared = (start + end - 1) as f64 / 2.0;
+        for index in &order[start..end] {
+            ranks[*index] = shared;
+        }
+        start = end;
+    }
+    for (index, point) in points.iter_mut().enumerate() {
+        let length = norm(*point);
+        let direction = if length > 0.0 {
+            [point[0] / length, point[1] / length]
+        } else {
+            let angle = GOLDEN_ANGLE * ranks[index];
+            [angle.cos(), angle.sin()]
+        };
+        let distance = radius * ((ranks[index] + 0.5) / count as f64).sqrt();
+        *point = [direction[0] * distance, direction[1] * distance];
+    }
 }
 
 /// Puts the siblings with no flavour, already in ring order, evenly on a ring
@@ -918,6 +966,36 @@ mod tests {
     }
 
     /// How far the given items reach from `center`.
+    #[test]
+    fn a_dense_core_does_not_leave_the_rim_empty() {
+        // 99 points packed near the centre and one far away: scaling by the
+        // farthest point squeezed the 99 into a dot. Spread by rank, half the
+        // points reach past 0.7 of the radius, the order of distances holds,
+        // and each point keeps its direction.
+        let mut points: Vec<[f64; 2]> = (0..99)
+            .map(|index| {
+                let angle = f64::from(index) * 0.7;
+                let length = 0.001 * (1.0 + f64::from(index) / 99.0);
+                [angle.cos() * length, angle.sin() * length]
+            })
+            .collect();
+        points.push([10.0, 0.0]);
+        let before = points.clone();
+        spread_evenly(&mut points, 1.0);
+        let mut distances: Vec<f64> = points.iter().map(|point| norm(*point)).collect();
+        for (old, new) in before.iter().zip(&points) {
+            let cross = old[0] * new[1] - old[1] * new[0];
+            assert!(cross.abs() < 1e-9 && old[0] * new[0] + old[1] * new[1] > 0.0);
+        }
+        for pair in before.windows(2).zip(distances.windows(2)) {
+            let (old, new) = pair;
+            assert_eq!(norm(old[0]) < norm(old[1]), new[0] < new[1]);
+        }
+        distances.sort_by(f64::total_cmp);
+        assert!(distances[50] > 0.7, "median {}", distances[50]);
+        assert!(distances[99] <= 1.0 + 1e-12);
+    }
+
     fn reach(layout: &Layout, center: [f64; 2], item_ids: &[u64]) -> f64 {
         item_ids
             .iter()

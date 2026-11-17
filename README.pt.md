@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/albertosca/corpus-cartographer/actions/workflows/ci.yml/badge.svg)](https://github.com/albertosca/corpus-cartographer/actions/workflows/ci.yml)
 [![Lint](https://github.com/albertosca/corpus-cartographer/actions/workflows/lint.yml/badge.svg)](https://github.com/albertosca/corpus-cartographer/actions/workflows/lint.yml)
-[![Coverage](https://img.shields.io/badge/coverage-98.84%25-brightgreen)](https://github.com/albertosca/corpus-cartographer/actions/workflows/ci.yml)
+[![Coverage](https://img.shields.io/badge/coverage-98.79%25-brightgreen)](https://github.com/albertosca/corpus-cartographer/actions/workflows/ci.yml)
 
 # corpus-cartographer
 
