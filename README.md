@@ -18,7 +18,9 @@ cd corpus-cartographer
 cargo install --path .
 ```
 
-![The hiking-trails example drawn by corpus-map: three territories, then a zoom into Mountains down to single trails](docs/trails-map.gif)
+![8,000 arXiv papers mapped by corpus-cartographer and drawn by corpus-map: five families, a zoom down to single papers, then one paper with its related papers and the words they share](docs/arxiv-map.gif)
+
+On real data: 8,000 computer-science papers from arXiv, almost all from 2026, give 9,881 links in about two minutes, 8,351 of them explained by the words they share. The [arXiv example](docs/usage.md#a-real-corpus-8000-arxiv-papers) shows how to run it and where it falls short.
 
 The [`corpus-map` live demo](https://albertosca.github.io/corpus-map/) shows the kind of map the output draws.
 
@@ -72,13 +74,13 @@ Each link in `trails-map/links.json` says how alike two items are (cosine simila
 
 The map itself is drawn by [`corpus-map`](https://github.com/albertosca/corpus-map#usage), a React component: give it `trails-map/map-spec.nested.json` as its `spec`. The [live demo](https://albertosca.github.io/corpus-map/) shows one without installing anything.
 
+![The hiking-trails example drawn by corpus-map: three territories, then a zoom into Mountains down to single trails](docs/trails-map.gif)
+
 ```
 export.json ──▶ corpus-cartographer ──▶ links.json            links, positions, warnings
 (+ embeddings,                       ├─▶ map-spec.v1.json      ──▶ corpus-map
    optional)                         └─▶ map-spec.nested.json  ──▶ corpus-map
 ```
-
-On real data: 8,000 computer-science papers from arXiv, almost all from 2026, give 9,881 links in about two minutes, 8,351 of them explained by the words they share. The [arXiv example](docs/usage.md#a-real-corpus-8000-arxiv-papers) shows how to run it and where it falls short.
 
 ## What you get
 
