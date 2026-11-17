@@ -10,7 +10,9 @@
 
 ## Your own data
 
-The engine does not read documents or extract terms, so you supply them. The terms can be keywords, tags, categories or extracted entities, whatever your system already has. Themes form a tree of top-level themes and their subthemes, and each item sits in one subtheme. This is a complete export:
+The engine does not read documents or extract terms, so you supply them: keywords, tags, categories or extracted entities, whatever your system already has.
+
+Themes form a tree of top-level themes and their subthemes, and each item sits in one subtheme. This is a complete export:
 
 ```json
 {
@@ -42,7 +44,9 @@ The engine does not read documents or extract terms, so you supply them. The ter
 corpus-cartographer --input articles.json --out-dir articles-map --floor 0.2
 ```
 
-This links the two database articles to each other, and the two networking articles to each other. The `--floor 0.2` is there because the corpus is tiny: a term weighs more the fewer items use it, and what every item shares counts for nothing, so on four items similarities stay low and the default floor of 0.4 would draw no link. The 15 trails of the quick start already link with the default.
+This links the two database articles to each other, and the two networking articles to each other.
+
+The `--floor 0.2` is there because the corpus is tiny. A term weighs more the fewer items use it, and a term every item shares counts for nothing. On four items similarities stay low, so the default floor of 0.4 would draw no link; the 15 trails of the quick start already link with it.
 
 To keep the map's shape on the next run, copy the `positions` object of the last `links.json` into `previous`.
 

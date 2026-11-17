@@ -6,7 +6,7 @@
 
 # corpus-cartographer
 
-**Transforma uma pilha de itens com termos num mapa: quais itens se relacionam, por quê, e onde cada um fica.**
+**Dê a ele itens com tags (artigos, notas, produtos, trilhas) e ele descobre quais se relacionam, diz por quê e organiza tudo num mapa navegável.**
 
 ## Instalar
 
@@ -24,11 +24,31 @@ A [demo ao vivo do `corpus-map`](https://albertosca.github.io/corpus-map/) mostr
 
 ## Começo rápido
 
+A entrada é um arquivo JSON, o export: os seus **itens**, os **termos** (tags ou palavras-chave) de cada um e os **temas** em que eles ficam. Este é um dos 15 itens de `examples/hiking-trails.json`, cortado para três termos:
+
+```json
+{
+  "id": 101,
+  "title": "Granite Spine",
+  "subtheme_id": 11,
+  "status": "assigned",
+  "badges": [],
+  "terms": [
+    { "label": "granite", "term": "granite" },
+    { "label": "ridge", "term": "ridge" },
+    { "label": "summit", "term": "summit" }
+  ]
+}
+```
+
+Os temas dele são Mountains, Coast e Forest, cada um dividido em dois subtemas. Rode o motor nele a partir do clone, ou baixe o arquivo antes se você só tem o binário:
+
 ```sh
+curl -fsSLO --create-dirs --output-dir examples https://raw.githubusercontent.com/albertosca/corpus-cartographer/main/examples/hiking-trails.json   # binary only
 corpus-cartographer --input examples/hiking-trails.json --out-dir trails-map
 ```
 
-Ele imprime um resumo de uma linha e escreve três arquivos em `trails-map/`:
+Ele escreve três arquivos em `trails-map/` e imprime um resumo: 15 itens, todos posicionados num tema, 14 com termos para comparar (um não tem nenhum) e 6 ligações.
 
 ```
 items=15 placed=15 waiting=0 with_vector=14 links=6 warnings=0
@@ -50,7 +70,7 @@ Cada ligação em `trails-map/links.json` diz o quanto dois itens se parecem (si
 }
 ```
 
-Para ver o mapa, instale o `corpus-map` pelo npm e passe o conteúdo de `trails-map/map-spec.nested.json` ao componente `<CorpusMap spec={...} />`, como mostra o [README do corpus-map](https://github.com/albertosca/corpus-map#usage).
+O mapa em si é desenhado pelo [`corpus-map`](https://github.com/albertosca/corpus-map#usage), um componente React: passe `trails-map/map-spec.nested.json` como o `spec` dele. A [demo ao vivo](https://albertosca.github.io/corpus-map/) mostra um mapa sem instalar nada.
 
 ```
 export.json ──▶ corpus-cartographer ──▶ links.json            links, positions, warnings
@@ -60,12 +80,13 @@ export.json ──▶ corpus-cartographer ──▶ links.json            links,
 
 ## O que você ganha
 
-- **Ligações explicadas.** Os vizinhos mais próximos de cada item, cada ligação com os termos que os dois compartilham.
-- **Um mapa.** Temas, subtemas e itens posicionados em 2D, com os itens que ainda esperam um tema numa fileira abaixo.
-- **Um mapa que mantém a forma.** Passe de volta as posições da última execução, e um item novo não gira nem espelha o mapa.
-- **Mesma entrada, mesmos bytes.** Um binário único, sem semente aleatória e com cinco dependências de runtime; o exemplo de 15 itens roda em menos de 10 ms e 5.000 itens com embeddings levam uns 10 s.
-- **Os seus próprios termos.** Palavras-chave, tags ou entidades que você já tem, opcionalmente com embeddings para termos relacionados contarem como parecidos.
-- **JSON puro.** Um contrato versionado com JSON schemas, então qualquer programa escreve a entrada e lê a saída.
+- **Ligações explicadas.** Os vizinhos mais próximos de cada item, e os termos que cada par compartilha.
+- **Um mapa.** Temas, seus subtemas e os itens dentro deles, posicionados em 2D. Itens ainda sem tema esperam numa fileira abaixo.
+- **Um mapa que mantém a forma.** Ponha as posições da última execução no campo `previous` do export, e um item novo não gira nem espelha o mapa.
+- **Mesma entrada, mesma saída.** Não há semente aleatória, então duas execuções dão os mesmos bytes.
+- **Rápido, e um binário só.** O exemplo de 15 itens roda em menos de 10 ms, e 5.000 itens com embeddings levam uns 10 s.
+- **Os seus próprios termos.** Palavras-chave, tags ou entidades que você já tem. Embeddings opcionais (vetores de palavras) fazem termos relacionados contarem como parecidos.
+- **JSON na entrada e na saída.** Cada arquivo tem um JSON schema versionado, então qualquer linguagem escreve a entrada e lê a saída.
 
 ## Documentação
 
@@ -78,13 +99,13 @@ A documentação detalhada está em inglês:
 ## Funciona com
 
 - O [`corpus-map`](https://github.com/albertosca/corpus-map) desenha os map specs.
-- O `corpus_atlas`, um motor Rails, escreve o export a partir do banco de uma aplicação e lê as ligações de volta.
+- O `corpus_atlas`, para aplicações Rails, monta o export a partir do banco da aplicação e grava as ligações de volta.
 
 Qualquer programa que escreva o JSON funciona igual, e cada peça também funciona sozinha.
 
 ## Status
 
-Versão 0.4.1, antes da 1.0. O contrato do export ainda pode mudar entre versões minor, cada mudança é listada no [CHANGELOG](CHANGELOG.md), e a versão anterior continua sendo lida por um tempo.
+Versão 0.4.1, antes da 1.0. O formato de entrada ainda pode mudar entre versões minor, e cada mudança é listada no [CHANGELOG](CHANGELOG.md). O formato anterior continua funcionando por mais uma versão minor.
 
 ## Licença
 
