@@ -18,9 +18,7 @@ cd corpus-cartographer
 cargo install --path .
 ```
 
-![8.000 papers do arXiv mapeados pelo corpus-cartographer e desenhados pelo corpus-map: cinco famílias, um zoom até os papers, depois um paper com os relacionados e as palavras em comum](docs/arxiv-map.gif)
-
-Com dados reais: 8.000 papers de computação do arXiv, quase todos de 2026, dão 9.881 ligações em uns dois minutos, 8.351 delas explicadas pelas palavras em comum. O [exemplo do arXiv](docs/usage.md#a-real-corpus-8000-arxiv-papers) mostra como rodar e onde ele fica devendo.
+![O exemplo das trilhas desenhado pelo corpus-map: três territórios, depois um zoom em Mountains até as trilhas](docs/trails-map.gif)
 
 A [demo ao vivo do `corpus-map`](https://albertosca.github.io/corpus-map/) mostra o tipo de mapa que a saída desenha.
 
@@ -74,13 +72,13 @@ Cada ligação em `trails-map/links.json` diz o quanto dois itens se parecem (si
 
 O mapa em si é desenhado pelo [`corpus-map`](https://github.com/albertosca/corpus-map#usage), um componente React: passe `trails-map/map-spec.nested.json` como o `spec` dele. A [demo ao vivo](https://albertosca.github.io/corpus-map/) mostra um mapa sem instalar nada.
 
-![O exemplo das trilhas desenhado pelo corpus-map: três territórios, depois um zoom em Mountains até as trilhas](docs/trails-map.gif)
-
 ```
 export.json ──▶ corpus-cartographer ──▶ links.json            links, positions, warnings
 (+ embeddings,                       ├─▶ map-spec.v1.json      ──▶ corpus-map
    optional)                         └─▶ map-spec.nested.json  ──▶ corpus-map
 ```
+
+Com dados reais: 8.000 papers de computação do arXiv, quase todos de 2026, dão 9.881 ligações em uns dois minutos, 8.351 delas explicadas pelas palavras em comum. O [exemplo do arXiv](docs/usage.md#a-real-corpus-8000-arxiv-papers) mostra como rodar e onde ele fica devendo.
 
 ## O que você ganha
 
