@@ -78,6 +78,8 @@ export.json ──▶ corpus-cartographer ──▶ links.json            links,
    optional)                         └─▶ map-spec.nested.json  ──▶ corpus-map
 ```
 
+On real data: 8,000 computer-science papers from arXiv, almost all from 2026, give 9,881 links in about two minutes, 8,351 of them explained by the words they share. The [arXiv example](docs/usage.md#a-real-corpus-8000-arxiv-papers) shows how to run it and where it falls short.
+
 ## What you get
 
 - **Explained links.** Each item's closest neighbours, and the terms each pair shares.

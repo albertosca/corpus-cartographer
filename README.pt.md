@@ -78,6 +78,8 @@ export.json ──▶ corpus-cartographer ──▶ links.json            links,
    optional)                         └─▶ map-spec.nested.json  ──▶ corpus-map
 ```
 
+Com dados reais: 8.000 papers de computação do arXiv, quase todos de 2026, dão 9.881 ligações em uns dois minutos, 8.351 delas explicadas pelas palavras em comum. O [exemplo do arXiv](docs/usage.md#a-real-corpus-8000-arxiv-papers) mostra como rodar e onde ele fica devendo.
+
 ## O que você ganha
 
 - **Ligações explicadas.** Os vizinhos mais próximos de cada item, e os termos que cada par compartilha.

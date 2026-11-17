@@ -32,6 +32,8 @@ With embeddings, time grows roughly with the square of the item count. This was 
 | 2,000 | 1.2 s | 34 MB |
 | 5,000 | 10 s | 69 MB |
 
+A real corpus can take longer than the square suggests. The [arXiv example](usage.md#a-real-corpus-8000-arxiv-papers), with 8,000 items in 18 subthemes of about 444 items each, took 120 s and 171 MB on the same machine.
+
 It is built for corpora of thousands of items, the scale `corpus-map` draws, and not for millions.
 
 ## What the tests guarantee

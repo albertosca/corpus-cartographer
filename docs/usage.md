@@ -84,6 +84,33 @@ On the trails example this takes the map from 6 links to 14: the mountain trails
 
 Use the multilingual model when the terms are not in English. "Praia" and "litoral" (beach and coast) have a cosine similarity of 0.14 with the English model and 0.64 with the multilingual one.
 
+## A real corpus: 8,000 arXiv papers
+
+The 15 trails show the format; this shows the engine on real data. The corpus is 8,000 computer-science papers fetched from arXiv in September 2026, almost all of them from 2026. Each paper's terms are the words of its title.
+
+The themes are 5 families (LLM agents & society, Training & inference, Vision & robotics, Theory & networks, Medical & speech AI) split into 18 subthemes. They were made before this run, by clustering the papers on a 2D projection of their abstracts' embeddings and naming each cluster.
+
+[`scripts/build_arxiv_export.py`](../scripts/build_arxiv_export.py) turns the published sample into an export:
+
+```sh
+curl -fsSL -o arxiv-map-spec.json https://raw.githubusercontent.com/albertosca/corpus-map/main/demo/corpora/arxiv.json
+python scripts/build_arxiv_export.py arxiv-map-spec.json arxiv-export.json
+python scripts/build_embeddings.py arxiv-export.json minishlab/potion-base-8M arxiv-embeddings
+corpus-cartographer --input arxiv-export.json --embeddings-dir arxiv-embeddings --out-dir arxiv-map
+```
+
+```
+items=8000 placed=8000 waiting=0 with_vector=7999 links=9881 warnings=0
+```
+
+The run took 120 s and 171 MB on an Apple M1, and found 9,881 links, 4,284 of them between different themes. "Diffusion Models and Concept Formation" links to "Concept-Level Risk and Calibration for Governance in Diffusion Foundation Models" through `concept`, `diffusion` and `models`.
+
+![The arXiv run drawn by corpus-map: the five families, a zoom into Training & inference down to single papers, then one paper with its related papers and shared words](arxiv-map.gif)
+
+Titles are short, so the result has limits. 3,071 papers have no link at the default floor, some links rest on one rare shared word, and 1,530 links rest on the embeddings alone, with no shared term. The published sample carries titles only, so terms from the abstracts were not tried.
+
+arXiv's metadata is available under CC0 1.0. Thank you to arXiv for use of its open access interoperability.
+
 ## Output
 
 | File | What it is |
