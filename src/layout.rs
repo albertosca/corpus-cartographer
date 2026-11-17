@@ -1,8 +1,10 @@
 //! Places territories (top-level themes), sub-themes inside them and items
 //! inside their sub-theme, each level by classical MDS on flavour distance
-//! (1 − cosine); aligns the two theme levels to the previous run; puts what
-//! has no flavour on a ring around its parent and the items waiting for
-//! the owner in a row below the map.
+//! (1 − cosine). It works from the bottom up: a sub-theme's disk grows with
+//! its item count, a territory's disk holds its sub-themes, and siblings are
+//! pushed apart until no two disks overlap. It aligns the two theme levels
+//! to the previous run, puts what has no flavour on a ring around its parent
+//! and the items waiting for the owner in a row below the map.
 
 use std::collections::BTreeMap;
 use std::f64::consts::TAU;
@@ -13,13 +15,15 @@ use crate::geometry::{align, classical_mds, round_to};
 use crate::vectors::{FlavourSpace, cosine, mean_direction, term_vector};
 use crate::warning::Warning;
 
-pub const TERRITORY_SCALE: f64 = 100.0;
-const ROOM_FRACTION: f64 = 0.35;
-const FILL_FRACTION: f64 = 0.6;
-const RING_GAP: f64 = 20.0;
+/// A sub-theme of n items fills a disk of radius `ITEM_SPACING * sqrt(n)`, so
+/// its area grows with its size and every item gets about the same room.
+const ITEM_SPACING: f64 = 5.0;
+/// The space kept between two sibling disks, as a fraction of their radii.
+const SIBLING_GAP_FRACTION: f64 = 0.25;
+const SEPARATION_SWEEPS: usize = 200;
 const INNER_RING_FRACTION: f64 = 0.3;
 const ROW_GAP: f64 = 20.0;
-const ROW_STEP: f64 = 5.0;
+const ROW_STEP: f64 = ITEM_SPACING;
 const DECIMALS: i32 = 6;
 
 #[derive(Debug, Clone, Default, PartialEq)]
@@ -54,9 +58,13 @@ struct Sibling {
 }
 
 /// How a level turns MDS coordinates into map units.
-enum Fit {
-    Scale(f64),
-    Radius(f64),
+enum Fit<'a> {
+    /// Items: the farthest flavoured one sits at `radius`, and the ones with
+    /// no flavour on a ring `ring_gap` outside the rest.
+    Radius { radius: f64, ring_gap: f64 },
+    /// Themes: each sibling is a disk with its own radius, keyed by id, and
+    /// no two disks overlap.
+    Disks(&'a BTreeMap<u64, f64>),
 }
 
 /// The export indexed for the layout: themes by id, assigned items by sub-theme.
@@ -135,42 +143,54 @@ pub fn lay_out(export: &EngineExport, space: &FlavourSpace, embeddings: &Embeddi
     let previous_subthemes = parse_keys(&previous.subthemes);
 
     let mut layout = Layout::default();
-    let territory_siblings: Vec<Sibling> = corpus
+    let mut territory_siblings: Vec<Sibling> = Vec::new();
+    let mut territories: BTreeMap<u64, Territory> = BTreeMap::new();
+    for theme in corpus
         .themes
         .iter()
         .filter(|theme| theme.parent_id.is_none())
-        .map(|theme| {
-            let subtheme_ids: Vec<u64> = corpus
-                .children(theme.id)
-                .iter()
-                .map(|subtheme| subtheme.id)
-                .collect();
-            corpus.sibling(theme, &subtheme_ids)
-        })
+    {
+        let subtheme_ids: Vec<u64> = corpus
+            .children(theme.id)
+            .iter()
+            .map(|subtheme| subtheme.id)
+            .collect();
+        territory_siblings.push(corpus.sibling(theme, &subtheme_ids));
+        territories.insert(
+            theme.id,
+            lay_out_territory(
+                &corpus,
+                theme.id,
+                previous_territories.get(&theme.id),
+                &previous_subthemes,
+                &mut layout.warnings,
+            ),
+        );
+    }
+    let territory_radii: BTreeMap<u64, f64> = territories
+        .iter()
+        .map(|(id, territory)| (*id, territory.radius))
         .collect();
     layout.territories = place_siblings(
         &territory_siblings,
-        &Fit::Scale(TERRITORY_SCALE),
-        RING_GAP,
+        &Fit::Disks(&territory_radii),
         export.previous.is_some().then_some(&previous_territories),
         None,
         true,
         &mut layout.warnings,
     );
-    let territory_room = room(&layout.territories, TERRITORY_SCALE * ROOM_FRACTION);
-    for (territory_id, territory_point) in layout.territories.clone() {
-        let territory = Placed {
-            id: territory_id,
-            point: territory_point,
-            room: territory_room,
-        };
-        lay_out_territory(
-            &corpus,
-            &territory,
-            previous_territories.get(&territory_id),
-            &previous_subthemes,
-            &mut layout,
-        );
+    for (territory_id, territory_point) in &layout.territories {
+        let territory = &territories[territory_id];
+        for (subtheme_id, offset) in &territory.subthemes {
+            layout
+                .subthemes
+                .insert(*subtheme_id, shifted(*territory_point, *offset));
+        }
+        for (item_id, offset) in &territory.items {
+            layout
+                .items
+                .insert(*item_id, shifted(*territory_point, *offset));
+        }
     }
 
     place_waiting_row(export, &mut layout);
@@ -179,22 +199,38 @@ pub fn lay_out(export: &EngineExport, space: &FlavourSpace, embeddings: &Embeddi
     layout
 }
 
-/// A parent already on the map: where it sits and how much room its children get.
-struct Placed {
-    id: u64,
-    point: [f64; 2],
-    room: f64,
+/// A territory laid out around the origin: its sub-themes and items as
+/// offsets, and how far they reach from the origin.
+struct Territory {
+    subthemes: BTreeMap<u64, [f64; 2]>,
+    items: BTreeMap<u64, [f64; 2]>,
+    radius: f64,
+}
+
+fn shifted(origin: [f64; 2], offset: [f64; 2]) -> [f64; 2] {
+    [origin[0] + offset[0], origin[1] + offset[1]]
+}
+
+fn norm(point: [f64; 2]) -> f64 {
+    point[0].hypot(point[1])
 }
 
 fn lay_out_territory(
     corpus: &Corpus,
-    territory: &Placed,
+    territory_id: u64,
     previous_territory: Option<&[f64; 2]>,
     previous_subthemes: &BTreeMap<u64, [f64; 2]>,
-    layout: &mut Layout,
-) {
-    let subtheme_siblings: Vec<Sibling> = corpus
-        .children(territory.id)
+    warnings: &mut Vec<Warning>,
+) -> Territory {
+    let children = corpus.children(territory_id);
+    let mut item_offsets: BTreeMap<u64, BTreeMap<u64, [f64; 2]>> = BTreeMap::new();
+    let mut subtheme_radii: BTreeMap<u64, f64> = BTreeMap::new();
+    for subtheme in &children {
+        let (offsets, radius) = lay_out_items(corpus, subtheme.id, warnings);
+        subtheme_radii.insert(subtheme.id, radius);
+        item_offsets.insert(subtheme.id, offsets);
+    }
+    let subtheme_siblings: Vec<Sibling> = children
         .iter()
         .map(|subtheme| corpus.sibling(subtheme, &[subtheme.id]))
         .collect();
@@ -222,37 +258,39 @@ fn lay_out_territory(
                 .collect()
         })
         .unwrap_or_default();
-    let offsets = place_siblings(
+    let subthemes = place_siblings(
         &subtheme_siblings,
-        &Fit::Radius(territory.room * FILL_FRACTION),
-        territory.room * INNER_RING_FRACTION,
+        &Fit::Disks(&subtheme_radii),
         (!previous_offsets.is_empty()).then_some(&previous_offsets),
-        Some(territory.id),
+        Some(territory_id),
         true,
-        &mut layout.warnings,
+        warnings,
     );
-    let subtheme_room = room(&offsets, territory.room * ROOM_FRACTION);
-    for (subtheme_id, offset) in offsets {
-        let center = [
-            territory.point[0] + offset[0],
-            territory.point[1] + offset[1],
-        ];
-        layout.subthemes.insert(subtheme_id, center);
-        lay_out_items(
-            corpus,
-            &Placed {
-                id: subtheme_id,
-                point: center,
-                room: subtheme_room,
-            },
-            layout,
-        );
+    let mut items = BTreeMap::new();
+    let mut radius = ITEM_SPACING;
+    for (subtheme_id, offset) in &subthemes {
+        radius = radius.max(norm(*offset) + subtheme_radii[subtheme_id]);
+        for (item_id, item_offset) in &item_offsets[subtheme_id] {
+            items.insert(*item_id, shifted(*offset, *item_offset));
+        }
+    }
+    Territory {
+        subthemes,
+        items,
+        radius,
     }
 }
 
-fn lay_out_items(corpus: &Corpus, subtheme: &Placed, layout: &mut Layout) {
+/// The items of one sub-theme around the origin, and the radius of its disk.
+/// Only items with a flavour size the disk: the ones without sit on a ring at
+/// its edge, so they neither weigh on the map nor make room for themselves.
+fn lay_out_items(
+    corpus: &Corpus,
+    subtheme_id: u64,
+    warnings: &mut Vec<Warning>,
+) -> (BTreeMap<u64, [f64; 2]>, f64) {
     let item_siblings: Vec<Sibling> = corpus
-        .members_of(subtheme.id)
+        .members_of(subtheme_id)
         .iter()
         .map(|id| Sibling {
             id: *id,
@@ -260,21 +298,28 @@ fn lay_out_items(corpus: &Corpus, subtheme: &Placed, layout: &mut Layout) {
             flavour: corpus.space.vector(*id).map(<[f64]>::to_vec),
         })
         .collect();
-    let item_offsets = place_siblings(
+    let flavoured = item_siblings
+        .iter()
+        .filter(|sibling| sibling.flavour.is_some())
+        .count();
+    let radius = ITEM_SPACING * (flavoured.max(1) as f64).sqrt();
+    let inner = if flavoured < item_siblings.len() {
+        radius / (1.0 + INNER_RING_FRACTION)
+    } else {
+        radius
+    };
+    let offsets = place_siblings(
         &item_siblings,
-        &Fit::Radius(subtheme.room * FILL_FRACTION),
-        subtheme.room * INNER_RING_FRACTION,
+        &Fit::Radius {
+            radius: inner,
+            ring_gap: radius - inner,
+        },
         None,
         None,
         false,
-        &mut layout.warnings,
+        warnings,
     );
-    for (item_id, offset) in item_offsets {
-        layout.items.insert(
-            item_id,
-            [subtheme.point[0] + offset[0], subtheme.point[1] + offset[1]],
-        );
-    }
+    (offsets, radius)
 }
 
 fn parse_keys(points: &BTreeMap<String, [f64; 2]>) -> BTreeMap<u64, [f64; 2]> {
@@ -284,33 +329,12 @@ fn parse_keys(points: &BTreeMap<String, [f64; 2]>) -> BTreeMap<u64, [f64; 2]> {
         .collect()
 }
 
-/// `ROOM_FRACTION` of the smallest distance between `points`, or `fallback`
-/// when there are fewer than two or two coincide.
-fn room(points: &BTreeMap<u64, [f64; 2]>, fallback: f64) -> f64 {
-    let values: Vec<[f64; 2]> = points.values().copied().collect();
-    let smallest = values
-        .iter()
-        .enumerate()
-        .flat_map(|(index, origin)| {
-            values[index + 1..].iter().map(move |destination| {
-                (origin[0] - destination[0]).hypot(origin[1] - destination[1])
-            })
-        })
-        .fold(f64::INFINITY, f64::min);
-    if smallest.is_finite() && smallest > 0.0 {
-        smallest * ROOM_FRACTION
-    } else {
-        fallback
-    }
-}
-
 /// Lays out one group of siblings around the origin: MDS on the flavoured
 /// ones, fitted, aligned to `previous` (when given) on shared ids; the rest
-/// on a ring outside, ordered by (name, id).
+/// on a ring outside, ordered by (name, id). Disks are then pushed apart.
 fn place_siblings(
     siblings: &[Sibling],
     fit: &Fit,
-    ring_gap: f64,
     previous: Option<&BTreeMap<u64, [f64; 2]>>,
     parent_id: Option<u64>,
     warn_flavourless: bool,
@@ -336,22 +360,20 @@ fn place_siblings(
         })
         .collect();
     let mut points = classical_mds(&distances);
-    match fit {
-        Fit::Scale(scale) => {
-            for point in &mut points {
-                *point = [point[0] * scale, point[1] * scale];
-            }
-        }
-        Fit::Radius(radius) => {
-            let farthest = points
+    let target = match fit {
+        Fit::Radius { radius, .. } => *radius,
+        Fit::Disks(radii) => {
+            let squares: f64 = flavoured
                 .iter()
-                .map(|point| point[0].hypot(point[1]))
-                .fold(0.0, f64::max);
-            if farthest > 0.0 {
-                for point in &mut points {
-                    *point = [point[0] * radius / farthest, point[1] * radius / farthest];
-                }
-            }
+                .map(|sibling| radii[&sibling.id].powi(2))
+                .sum();
+            squares.sqrt() * (1.0 + SIBLING_GAP_FRACTION)
+        }
+    };
+    let farthest = points.iter().map(|point| norm(*point)).fold(0.0, f64::max);
+    if farthest > 0.0 {
+        for point in &mut points {
+            *point = [point[0] * target / farthest, point[1] * target / farthest];
         }
     }
     if let Some(previous) = previous {
@@ -388,6 +410,21 @@ fn place_siblings(
         .filter(|sibling| sibling.flavour.is_none())
         .collect();
     flavourless.sort_by(|left, right| left.name.cmp(&right.name).then(left.id.cmp(&right.id)));
+    place_on_ring(&flavourless, fit, &mut placed);
+    if warn_flavourless {
+        for sibling in &flavourless {
+            warnings.push(Warning::no_flavour(sibling.id));
+        }
+    }
+    if let Fit::Disks(radii) = fit {
+        separate(&mut placed, radii);
+    }
+    placed
+}
+
+/// Puts the siblings with no flavour, already in ring order, evenly on a ring
+/// around the centre of the ones `placed`, outside all of them.
+fn place_on_ring(flavourless: &[&Sibling], fit: &Fit, placed: &mut BTreeMap<u64, [f64; 2]>) {
     let center = if placed.is_empty() {
         [0.0, 0.0]
     } else {
@@ -397,11 +434,25 @@ fn place_siblings(
         });
         [sum[0] / count, sum[1] / count]
     };
-    let radius = placed
-        .values()
-        .map(|point| (point[0] - center[0]).hypot(point[1] - center[1]))
-        .fold(0.0, f64::max)
-        + ring_gap;
+    let own_radius = |id: u64| match fit {
+        Fit::Radius { .. } => 0.0,
+        Fit::Disks(radii) => radii[&id],
+    };
+    let reach = placed
+        .iter()
+        .map(|(id, point)| (point[0] - center[0]).hypot(point[1] - center[1]) + own_radius(*id))
+        .fold(0.0, f64::max);
+    let ring_gap = match fit {
+        Fit::Radius { ring_gap, .. } => *ring_gap,
+        Fit::Disks(_) => {
+            flavourless
+                .iter()
+                .map(|sibling| own_radius(sibling.id))
+                .fold(0.0, f64::max)
+                * (1.0 + SIBLING_GAP_FRACTION)
+        }
+    };
+    let radius = reach + ring_gap;
     let count = flavourless.len() as f64;
     for (position, sibling) in flavourless.iter().enumerate() {
         let angle = TAU * position as f64 / count;
@@ -412,11 +463,81 @@ fn place_siblings(
                 center[1] + radius * angle.sin(),
             ],
         );
-        if warn_flavourless {
-            warnings.push(Warning::no_flavour(sibling.id));
+    }
+}
+
+/// Pushes overlapping disks apart along the line between their centres, pair
+/// by pair in id order, then scales the group up around its centre if a pair
+/// still overlaps, so that no two disks overlap when it returns.
+fn separate(placed: &mut BTreeMap<u64, [f64; 2]>, radii: &BTreeMap<u64, f64>) {
+    let ids: Vec<u64> = placed.keys().copied().collect();
+    let mut points: Vec<[f64; 2]> = placed.values().copied().collect();
+    let count = points.len();
+    let needed = |left: usize, right: usize| {
+        (radii[&ids[left]] + radii[&ids[right]]) * (1.0 + SIBLING_GAP_FRACTION)
+    };
+    for _sweep in 0..SEPARATION_SWEEPS {
+        let mut moved = false;
+        for left in 0..count {
+            for right in left + 1..count {
+                let delta = [
+                    points[right][0] - points[left][0],
+                    points[right][1] - points[left][1],
+                ];
+                let gap = norm(delta);
+                let need = needed(left, right);
+                if gap >= need * (1.0 - 1e-9) {
+                    continue;
+                }
+                // Coincident centres get a direction from their positions in
+                // the group, so the result never depends on anything else.
+                let direction = if gap > 0.0 {
+                    [delta[0] / gap, delta[1] / gap]
+                } else {
+                    let angle = TAU * (left * count + right) as f64 / (count * count) as f64;
+                    [angle.cos(), angle.sin()]
+                };
+                let push = (need - gap) / 2.0;
+                points[left] = [
+                    points[left][0] - direction[0] * push,
+                    points[left][1] - direction[1] * push,
+                ];
+                points[right] = [
+                    points[right][0] + direction[0] * push,
+                    points[right][1] + direction[1] * push,
+                ];
+                moved = true;
+            }
+        }
+        if !moved {
+            break;
         }
     }
-    placed
+    let scale = (0..count)
+        .flat_map(|left| (left + 1..count).map(move |right| (left, right)))
+        .filter_map(|(left, right)| {
+            let gap =
+                (points[right][0] - points[left][0]).hypot(points[right][1] - points[left][1]);
+            (gap > 0.0).then(|| needed(left, right) / gap)
+        })
+        .fold(1.0, f64::max);
+    if scale > 1.0 {
+        let centre = points.iter().fold([0.0, 0.0], |total, point| {
+            [
+                total[0] + point[0] / count as f64,
+                total[1] + point[1] / count as f64,
+            ]
+        });
+        for point in &mut points {
+            *point = [
+                centre[0] + (point[0] - centre[0]) * scale,
+                centre[1] + (point[1] - centre[1]) * scale,
+            ];
+        }
+    }
+    for (id, point) in ids.into_iter().zip(points) {
+        placed.insert(id, point);
+    }
 }
 
 fn place_waiting_row(export: &EngineExport, layout: &mut Layout) {
@@ -793,6 +914,129 @@ mod tests {
         assert_eq!(
             layout_of(THEMES, &base_items(), "null"),
             layout_of(&themes_reversed, &reversed, "null")
+        );
+    }
+
+    /// How far the given items reach from `center`.
+    fn reach(layout: &Layout, center: [f64; 2], item_ids: &[u64]) -> f64 {
+        item_ids
+            .iter()
+            .map(|id| distance(layout.items[id], center))
+            .fold(0.0, f64::max)
+    }
+
+    /// Two territories of three sub-themes with four items each; in the
+    /// first, sub-themes 11 and 12 have almost the same flavour.
+    fn close_pair_corpus() -> (&'static str, Vec<String>, BTreeMap<u64, Vec<u64>>) {
+        let themes = r#"[
+            {"id":1,"parent_id":null,"name":"Close pair","terms":[]},
+            {"id":2,"parent_id":null,"name":"Far pair","terms":[]},
+            {"id":11,"parent_id":1,"name":"Beef","terms":[]},
+            {"id":12,"parent_id":1,"name":"Beef again","terms":[]},
+            {"id":13,"parent_id":1,"name":"Flour","terms":[]},
+            {"id":21,"parent_id":2,"name":"Flour","terms":[]},
+            {"id":22,"parent_id":2,"name":"Lime","terms":[]},
+            {"id":23,"parent_id":2,"name":"Beef","terms":[]}
+        ]"#;
+        let members: [(u64, [&[&str]; 4]); 6] = [
+            (
+                11,
+                [
+                    &["beef"],
+                    &["beef", "flour"],
+                    &["beef", "lime"],
+                    &["beef", "flour", "lime"],
+                ],
+            ),
+            (
+                12,
+                [&["beef"], &["beef", "flour"], &["beef", "lime"], &["beef"]],
+            ),
+            (
+                13,
+                [
+                    &["flour"],
+                    &["flour", "beef"],
+                    &["flour", "lime"],
+                    &["flour", "beef", "lime"],
+                ],
+            ),
+            (
+                21,
+                [
+                    &["flour"],
+                    &["flour", "beef"],
+                    &["flour", "lime"],
+                    &["flour", "beef", "lime"],
+                ],
+            ),
+            (
+                22,
+                [
+                    &["lime"],
+                    &["lime", "beef"],
+                    &["lime", "flour"],
+                    &["lime", "beef", "flour"],
+                ],
+            ),
+            (
+                23,
+                [
+                    &["beef"],
+                    &["beef", "flour"],
+                    &["beef", "lime"],
+                    &["beef", "flour", "lime"],
+                ],
+            ),
+        ];
+        let mut items = Vec::new();
+        let mut ids_of: BTreeMap<u64, Vec<u64>> = BTreeMap::new();
+        for (subtheme, term_lists) in members {
+            for (position, terms) in term_lists.iter().enumerate() {
+                let id = subtheme * 10 + position as u64;
+                items.push(item(id, Some(subtheme), terms));
+                ids_of.entry(subtheme).or_default().push(id);
+            }
+        }
+        (themes, items, ids_of)
+    }
+
+    #[test]
+    fn room_follows_size_and_not_the_closest_sibling() {
+        // The arXiv run packed 600 items into a radius of 1.2 on a map 100 wide,
+        // because one close pair of sub-themes shrank the room of every other.
+        let (themes, items, ids_of) = close_pair_corpus();
+        let layout = layout_of(themes, &items, "null");
+
+        let spread: BTreeMap<u64, f64> = ids_of
+            .iter()
+            .map(|(subtheme, ids)| (*subtheme, reach(&layout, layout.subthemes[subtheme], ids)))
+            .collect();
+        for (subtheme, value) in &spread {
+            assert!(
+                (value - spread[&21]).abs() <= 1e-6 * spread[&21],
+                "sub-theme {subtheme} spreads {value}, sub-theme 21 spreads {}",
+                spread[&21]
+            );
+        }
+        for (left, right) in [(11, 12), (11, 13), (12, 13), (21, 22), (21, 23), (22, 23)] {
+            assert!(
+                distance(layout.subthemes[&left], layout.subthemes[&right])
+                    >= spread[&left] + spread[&right],
+                "sub-themes {left} and {right} overlap"
+            );
+        }
+        let territory_reach = |territory: u64, subthemes: [u64; 3]| {
+            let ids: Vec<u64> = subthemes
+                .iter()
+                .flat_map(|subtheme| ids_of[subtheme].clone())
+                .collect();
+            reach(&layout, layout.territories[&territory], &ids)
+        };
+        assert!(
+            distance(layout.territories[&1], layout.territories[&2])
+                >= territory_reach(1, [11, 12, 13]) + territory_reach(2, [21, 22, 23]),
+            "territories overlap"
         );
     }
 }

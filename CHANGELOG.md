@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- The layout gives each sub-theme a disk whose area grows with its count of items that have a vector, and pushes sibling disks apart until none overlap. Before, every level got 35% of the smallest gap between two siblings, so one close pair squeezed the whole map: on the arXiv run, 600 papers sat within a radius of 1.2 on a map 100 wide. Links are unchanged; positions change, and so do the goldens.
 - The `gem.yml` workflow is removed: the engine is tested on its own, and the `corpus_atlas` gem checks the engine it pins from its own repository. The `GEM_READ_TOKEN` secret is no longer needed.
 - `scripts/build_embeddings.py` builds an embeddings directory from an export with a Model2Vec model (a null term is skipped, and an export with no terms is refused). The module comment in `src/embeddings.rs` describes the format instead of naming a model that does not exist.
 - Both READMEs are rewritten as a short front door: install, a GIF of the trails example drawn by `corpus-map`, a quick start with the real output, and links to the details. The details move to `docs/usage.md` (your own data, options, embeddings, output, warnings and errors, contract) and `docs/how-it-works.md` (why the engine exists, the design and its trade-offs, measured sizes, what the tests guarantee).
