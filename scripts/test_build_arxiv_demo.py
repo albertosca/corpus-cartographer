@@ -88,8 +88,26 @@ class BuildDemoTest(unittest.TestCase):
         ]
         self.assertRefused(engine, "listed twice")
 
+    def test_refuses_a_boolean_where_a_number_belongs(self) -> None:
+        engine = engine_spec()
+        engine["nodes"][1]["x"] = True
+        self.assertRefused(engine, "not a finite position")
+        engine = engine_spec()
+        engine["edges"][0]["weight"] = True
+        self.assertRefused(engine, "weight")
+
+    def test_names_a_weight_that_is_not_a_number_as_it_is(self) -> None:
+        engine = engine_spec()
+        engine["edges"][0]["weight"] = "0.5"
+        self.assertRefused(engine, "has weight '0.5'")
+
+    def test_accepts_an_engine_territory_the_map_does_not_use(self) -> None:
+        engine = engine_spec()
+        engine["territories"].append({"id": "theme:999", "centroid": None})
+        self.assertEqual(build_demo(map_spec(), engine)["edges"], [[0, 1, 50]])
+
     def test_refuses_a_weight_the_demo_cannot_hold(self) -> None:
-        for weight in (0.004, 0.0, -0.5, 1.2, math.nan):
+        for weight in (0.004, 0.0, -0.5, 1.004, 1.2, math.nan):
             with self.subTest(weight=weight):
                 engine = engine_spec()
                 engine["edges"][0]["weight"] = weight
@@ -121,7 +139,19 @@ class CommandLineTest(unittest.TestCase):
             (folder / "map.json").write_text(json.dumps(map_spec()))
             (folder / "truncated.json").write_text(json.dumps(engine_spec())[:40])
             (folder / "no-nodes.json").write_text(json.dumps({"territories": [], "edges": []}))
-            for engine_name, message in (("truncated.json", "is not valid JSON"), ("no-nodes.json", "has no 'nodes'")):
+            no_weight = engine_spec()
+            del no_weight["edges"][0]["weight"]
+            (folder / "no-weight.json").write_text(json.dumps(no_weight))
+            (folder / "null-edges.json").write_text(json.dumps({**engine_spec(), "edges": None}))
+            (folder / "empty.json").write_text(json.dumps({"nodes": [], "territories": [], "edges": []}))
+            cases = (
+                ("truncated.json", "is not valid JSON"),
+                ("no-nodes.json", "has no 'nodes'"),
+                ("no-weight.json", "not the shape"),
+                ("null-edges.json", "not the shape"),
+                ("empty.json", "does not list the same papers"),
+            )
+            for engine_name, message in cases:
                 with self.subTest(engine=engine_name):
                     output = folder / "out.json"
                     result = self.run_script(str(folder / "map.json"), str(folder / engine_name), str(output))
@@ -129,6 +159,18 @@ class CommandLineTest(unittest.TestCase):
                     self.assertIn(message, result.stderr)
                     self.assertNotIn("Traceback", result.stderr)
                     self.assertFalse(output.exists())
+
+    def test_an_output_folder_that_does_not_exist_is_a_refusal(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            folder = Path(directory)
+            (folder / "map.json").write_text(json.dumps(map_spec()))
+            (folder / "engine.json").write_text(json.dumps(engine_spec()))
+            result = self.run_script(
+                str(folder / "map.json"), str(folder / "engine.json"), str(folder / "missing" / "out.json")
+            )
+            self.assertEqual(result.returncode, 1)
+            self.assertIn("cannot be written", result.stderr)
+            self.assertNotIn("Traceback", result.stderr)
 
 
 if __name__ == "__main__":

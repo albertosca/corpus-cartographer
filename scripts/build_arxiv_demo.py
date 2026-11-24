@@ -28,6 +28,11 @@ sys.dont_write_bytecode = True
 from build_arxiv_export import theme_ids
 
 
+def is_number(value: object) -> bool:
+    """A finite int or float; a bool is not one, though Python counts it as an int."""
+    return isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(value)
+
+
 def build_demo(map_spec: dict, engine_spec: dict) -> dict:
     """The demo payload: `map_spec` with the engine's positions, centroids and links. Raises SystemExit on a mismatch."""
     nodes = map_spec["nodes"]
@@ -54,11 +59,11 @@ def build_demo(map_spec: dict, engine_spec: dict) -> dict:
         raise SystemExit(f"the engine spec has no territory for {', '.join(missing)}")
 
     positions = [[node["x"], node["y"]] for node in engine_nodes]
-    positions += [territory.get("centroid") for territory in engine_territories.values()]
+    positions += [
+        engine_territories[engine_id_of[territory["id"]]].get("centroid") for territory in map_spec["territories"]
+    ]
     if not all(
-        isinstance(position, list)
-        and len(position) == 2
-        and all(isinstance(value, (int, float)) and math.isfinite(value) for value in position)
+        isinstance(position, list) and len(position) == 2 and all(is_number(value) for value in position)
         for position in positions
     ):
         raise SystemExit("the engine spec has a paper or territory that is not a finite position")
@@ -94,9 +99,9 @@ def build_demo(map_spec: dict, engine_spec: dict) -> dict:
         pairs.add(frozenset((source, target)))
         # corpus-map's demo holds a weight as a whole number in 1..100.
         weight = edge["weight"]
-        if not (isinstance(weight, (int, float)) and math.isfinite(weight) and 1 <= round(weight * 100) <= 100):
+        if not (is_number(weight) and 0 < weight <= 1 and round(weight * 100) >= 1):
             raise SystemExit(
-                f"the engine link {edge['source']}-{edge['target']} has weight {weight}, outside (0.005, 1]"
+                f"the engine link {edge['source']}-{edge['target']} has weight {weight!r}, outside (0.005, 1]"
             )
         demo["edges"].append([source, target, round(weight * 100)])
     return demo
@@ -123,10 +128,21 @@ def main() -> None:
     if len(sys.argv) != 4:
         sys.exit(__doc__)
     map_spec_path, engine_path, output_path = (Path(argument) for argument in sys.argv[1:4])
-    demo = build_demo(
-        read_spec(map_spec_path, ("nodes", "territories")), read_spec(engine_path, ("nodes", "territories"))
+    map_spec, engine_spec = (
+        read_spec(map_spec_path, ("nodes", "territories")),
+        read_spec(engine_path, ("nodes", "territories")),
     )
-    output_path.write_text(json.dumps(demo, separators=(",", ":"), ensure_ascii=False, allow_nan=False))
+    try:
+        demo = build_demo(map_spec, engine_spec)
+        payload = json.dumps(demo, separators=(",", ":"), ensure_ascii=False, allow_nan=False)
+    except (KeyError, TypeError, ValueError, OverflowError) as error:
+        raise SystemExit(
+            f"the specs are not the shape this converter reads ({type(error).__name__}: {error})"
+        ) from None
+    try:
+        output_path.write_text(payload)
+    except OSError as error:
+        raise SystemExit(f"{output_path} cannot be written: {error.strerror}") from None
     print(
         f"{len(demo['nodes'])} papers, {len(demo['territories'])} territories, {len(demo['edges'])} links, written to {output_path}"
     )
