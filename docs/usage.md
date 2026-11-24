@@ -93,7 +93,7 @@ The themes are 5 families (LLM agents & society, Training & inference, Vision & 
 [`scripts/build_arxiv_export.py`](../scripts/build_arxiv_export.py) turns the published sample into an export:
 
 ```sh
-curl -fsSL -o arxiv-map-spec.json https://raw.githubusercontent.com/albertosca/corpus-map/main/demo/corpora/arxiv.json
+curl -fsSL -o arxiv-map-spec.json https://raw.githubusercontent.com/albertosca/corpus-map/1f3cdc7/demo/corpora/arxiv.json
 python scripts/build_arxiv_export.py arxiv-map-spec.json arxiv-export.json
 python scripts/build_embeddings.py arxiv-export.json minishlab/potion-base-8M arxiv-embeddings
 corpus-cartographer --input arxiv-export.json --embeddings-dir arxiv-embeddings --out-dir arxiv-map
