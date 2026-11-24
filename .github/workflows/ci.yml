@@ -30,3 +30,9 @@ jobs:
       - uses: actions/checkout@v7
       - run: rustup toolchain install 1.88 --profile minimal
       - run: cargo +1.88 test --locked
+  # The arXiv demo converter's refusals (standard library only, like the script).
+  scripts:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - run: python3 -B -m unittest discover -s scripts

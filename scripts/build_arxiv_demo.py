@@ -16,6 +16,7 @@ Thank you to arXiv for use of its open access interoperability.
 """
 
 import json
+import math
 import sys
 from pathlib import Path
 
@@ -31,8 +32,10 @@ def build_demo(map_spec: dict, engine_spec: dict) -> dict:
     """The demo payload: `map_spec` with the engine's positions, centroids and links. Raises SystemExit on a mismatch."""
     nodes = map_spec["nodes"]
     engine_nodes = engine_spec["nodes"]
+    # The export numbers papers from 1 in this spec's order, and the engine names each one item:<that number>.
     if len(nodes) != len(engine_nodes) or any(
-        node["label"] != engine_node["label"] for node, engine_node in zip(nodes, engine_nodes)
+        node["label"] != engine_node["label"] or engine_node["id"] != f"item:{position}"
+        for position, (node, engine_node) in enumerate(zip(nodes, engine_nodes), start=1)
     ):
         raise SystemExit("the engine spec does not list the same papers in the same order")
     family_ids, leaf_ids = theme_ids(map_spec)
@@ -49,6 +52,16 @@ def build_demo(map_spec: dict, engine_spec: dict) -> dict:
     ]
     if missing:
         raise SystemExit(f"the engine spec has no territory for {', '.join(missing)}")
+
+    positions = [[node["x"], node["y"]] for node in engine_nodes]
+    positions += [territory.get("centroid") for territory in engine_territories.values()]
+    if not all(
+        isinstance(position, list)
+        and len(position) == 2
+        and all(isinstance(value, (int, float)) and math.isfinite(value) for value in position)
+        for position in positions
+    ):
+        raise SystemExit("the engine spec has a paper or territory that is not a finite position")
 
     minimum_horizontal = min(node["x"] for node in engine_nodes)
     maximum_horizontal = max(node["x"] for node in engine_nodes)
@@ -70,18 +83,50 @@ def build_demo(map_spec: dict, engine_spec: dict) -> dict:
     unknown = [edge for edge in edges if edge["source"] not in index_of or edge["target"] not in index_of]
     if unknown:
         raise SystemExit(f"{len(unknown)} engine links name a paper the spec does not list")
-    demo["edges"] = [
-        [index_of[edge["source"]], index_of[edge["target"]], round(edge["weight"] * 100)] for edge in edges
-    ]
+    demo["edges"] = []
+    pairs = set()
+    for edge in edges:
+        source, target = index_of[edge["source"]], index_of[edge["target"]]
+        if source == target:
+            raise SystemExit(f"an engine link links a paper to itself ({edge['source']})")
+        if frozenset((source, target)) in pairs:
+            raise SystemExit(f"the engine link between {edge['source']} and {edge['target']} is listed twice")
+        pairs.add(frozenset((source, target)))
+        # corpus-map's demo holds a weight as a whole number in 1..100.
+        weight = edge["weight"]
+        if not (isinstance(weight, (int, float)) and math.isfinite(weight) and 1 <= round(weight * 100) <= 100):
+            raise SystemExit(
+                f"the engine link {edge['source']}-{edge['target']} has weight {weight}, outside (0.005, 1]"
+            )
+        demo["edges"].append([source, target, round(weight * 100)])
     return demo
 
 
+def read_spec(path: Path, keys: tuple[str, ...]) -> dict:
+    """The JSON object at `path`, with each of `keys`. Raises SystemExit on a file that is not one."""
+    try:
+        spec = json.loads(path.read_text())
+    except OSError as error:
+        raise SystemExit(f"{path} cannot be read: {error.strerror}") from None
+    except json.JSONDecodeError as error:
+        raise SystemExit(f"{path} is not valid JSON ({error.msg}, line {error.lineno})") from None
+    for key in keys:
+        if not isinstance(spec, dict) or key not in spec:
+            raise SystemExit(f"{path} has no '{key}'")
+    return spec
+
+
 def main() -> None:
+    if sys.argv[1:] in (["--help"], ["-h"]):
+        print(__doc__)
+        return
     if len(sys.argv) != 4:
         sys.exit(__doc__)
     map_spec_path, engine_path, output_path = (Path(argument) for argument in sys.argv[1:4])
-    demo = build_demo(json.loads(map_spec_path.read_text()), json.loads(engine_path.read_text()))
-    output_path.write_text(json.dumps(demo, separators=(",", ":"), ensure_ascii=False))
+    demo = build_demo(
+        read_spec(map_spec_path, ("nodes", "territories")), read_spec(engine_path, ("nodes", "territories"))
+    )
+    output_path.write_text(json.dumps(demo, separators=(",", ":"), ensure_ascii=False, allow_nan=False))
     print(
         f"{len(demo['nodes'])} papers, {len(demo['territories'])} territories, {len(demo['edges'])} links, written to {output_path}"
     )

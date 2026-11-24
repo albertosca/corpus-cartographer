@@ -16,6 +16,7 @@ cargo install --locked cargo-deny@0.20.2 && cargo deny --locked check
 rustup toolchain install 1.88 --profile minimal && cargo +1.88 test --locked
 rustup component add llvm-tools-preview && cargo install --locked cargo-llvm-cov@0.9.1
 cargo llvm-cov --locked --summary-only --fail-under-lines 98
+python3 -B -m unittest discover -s scripts           # the arXiv demo converter's tests
 ```
 
 The coverage badge is a fixed image, so update its number in both READMEs when `cargo llvm-cov` reports a new one.
