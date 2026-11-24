@@ -45,11 +45,19 @@ def title_terms(title: str) -> list[dict]:
     return terms
 
 
-def build_export(map_spec: dict) -> dict:
+def theme_ids(map_spec: dict) -> tuple[dict[str, int], dict[str, int]]:
+    """The engine theme id of each family (1, 2, ...) and of each leaf (101, 102, ...), in the spec's order."""
     families = [territory for territory in map_spec["territories"] if territory.get("parent") is None]
     leaves = [territory for territory in map_spec["territories"] if territory.get("parent") is not None]
     family_ids = {family["id"]: position for position, family in enumerate(families, start=1)}
     leaf_ids = {leaf["id"]: 100 + position for position, leaf in enumerate(leaves, start=1)}
+    return family_ids, leaf_ids
+
+
+def build_export(map_spec: dict) -> dict:
+    families = [territory for territory in map_spec["territories"] if territory.get("parent") is None]
+    leaves = [territory for territory in map_spec["territories"] if territory.get("parent") is not None]
+    family_ids, leaf_ids = theme_ids(map_spec)
     themes = [{"id": family_ids[family["id"]], "parent_id": None, "name": family["name"], "terms": []} for family in families]
     themes += [
         {"id": leaf_ids[leaf["id"]], "parent_id": family_ids[leaf["parent"]], "name": leaf["name"], "terms": []}

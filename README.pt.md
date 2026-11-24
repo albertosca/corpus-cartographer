@@ -22,7 +22,7 @@ cargo install --path .
 
 Com dados reais: 8.000 papers de computação do arXiv, quase todos de 2026, dão 9.881 ligações em uns dois minutos, 8.351 delas explicadas pelas palavras em comum. O [exemplo do arXiv](docs/usage.md#a-real-corpus-8000-arxiv-papers) mostra como rodar e onde ele fica devendo.
 
-A [demo ao vivo do `corpus-map`](https://albertosca.github.io/corpus-map/) mostra o tipo de mapa que a saída desenha.
+A [demo ao vivo do `corpus-map`](https://albertosca.github.io/corpus-map/#corpus=arxiv) desenha essa rodada do arXiv.
 
 ## Começo rápido
 
@@ -72,7 +72,7 @@ Cada ligação em `trails-map/links.json` diz o quanto dois itens se parecem (si
 }
 ```
 
-O mapa em si é desenhado pelo [`corpus-map`](https://github.com/albertosca/corpus-map#usage), um componente React: passe `trails-map/map-spec.nested.json` como o `spec` dele. A [demo ao vivo](https://albertosca.github.io/corpus-map/) mostra um mapa sem instalar nada.
+O mapa em si é desenhado pelo [`corpus-map`](https://github.com/albertosca/corpus-map#usage), um componente React: passe `trails-map/map-spec.nested.json` como o `spec` dele. A [demo ao vivo](https://albertosca.github.io/corpus-map/#corpus=arxiv) mostra um mapa sem instalar nada.
 
 ```
 export.json ──▶ corpus-cartographer ──▶ links.json            links, positions, warnings

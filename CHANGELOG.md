@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- `scripts/build_arxiv_demo.py` writes an engine map of the arXiv sample back as corpus-map's compact `arxiv.json`, taking the engine's positions, centroids and links and refusing a map of other papers or with a paper in another territory. The live demo's arXiv corpus is that map, and the READMEs link to it. The territory id rule moves into `theme_ids` in `scripts/build_arxiv_export.py`, which both scripts use.
 - The layout gives each sub-theme a disk whose area grows with its count of items that have a vector, and pushes sibling disks apart until none overlap, starting them packed so no empty band is left between them. Items fill their disk evenly, each keeping its direction from the centre and its rank by distance, so a dense core no longer leaves the rim empty. Before, every level got 35% of the smallest gap between two siblings, so one close pair squeezed the whole map: on the arXiv run, 600 papers sat within a radius of 1.2 on a map 100 wide. Links are unchanged; positions change, and so do the goldens.
 - The `gem.yml` workflow is removed: the engine is tested on its own, and the gem checks the engine it pins from its own repository. The `GEM_READ_TOKEN` secret is no longer needed.
 - `scripts/build_embeddings.py` builds an embeddings directory from an export with a Model2Vec model (a null term is skipped, and an export with no terms is refused). The module comment in `src/embeddings.rs` describes the format instead of naming a model that does not exist.
